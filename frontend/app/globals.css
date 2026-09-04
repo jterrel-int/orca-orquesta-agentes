@@ -1,0 +1,220 @@
+/* Orquesta — sistema visual.
+   Sala de control: fondo de pizarra profunda, no negro puro. Cada agente tiene
+   su matiz propio para que el ojo siga una columna sin leer la etiqueta.
+   El verde y el rojo son estado, nunca decoración. */
+
+:root {
+  --fondo:   #12171D;
+  --panel:   #1A2028;
+  --realce:  #232B35;
+  --borde:   #2C3540;
+
+  --texto:   #E4E7EA;
+  --apagado: #8A949F;
+
+  --backend:      #6C9CF5;
+  --frontend:     #C88BE8;
+  --deploy:       #F2A65A;
+  --orchestrator: #8A949F;
+
+  --ok:      #4FB286;
+  --error:   #E0603E;
+
+  --radio: 4px;
+
+  /* Si las webfonts no cargan (sin red), cae al stack del sistema sin romper nada. */
+  --fuente-ui: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fuente-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Consolas", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: var(--fuente-ui);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono, .log, code, .tabla td.mono {
+  font-family: var(--fuente-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+a { color: var(--backend); }
+
+/* --- estructura --- */
+
+.cabecera {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--borde);
+  flex-wrap: wrap;
+}
+
+.cabecera h1 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.cabecera .sub { color: var(--apagado); font-size: 0.88rem; }
+.cabecera .derecha { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; }
+
+.contenido { padding: 1.5rem; max-width: 74rem; }
+
+.rejilla-agentes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+/* --- tarjeta de agente --- */
+
+.tarjeta {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-top: 2px solid var(--matiz, var(--borde));
+  border-radius: var(--radio);
+  padding: 0.9rem 1rem;
+  min-height: 6.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.tarjeta .nombre {
+  font-weight: 600;
+  color: var(--matiz, var(--texto));
+  letter-spacing: 0.01em;
+}
+
+.tarjeta .ultimo {
+  color: var(--apagado);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.tarjeta .pie {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--apagado);
+}
+
+/* --- indicador de estado --- */
+
+.estado { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; }
+.punto { width: 7px; height: 7px; border-radius: 50%; background: var(--apagado); flex: none; }
+.estado.running .punto { background: var(--matiz, var(--backend)); animation: latido 1.2s ease-in-out infinite; }
+.estado.done  .punto { background: var(--ok); }
+.estado.done  { color: var(--ok); }
+.estado.error .punto { background: var(--error); }
+.estado.error { color: var(--error); }
+
+@keyframes latido {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+/* --- consola de logs --- */
+
+.consola {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  height: 24rem;
+  overflow-y: auto;
+  padding: 0.75rem 0;
+}
+
+.linea {
+  display: grid;
+  grid-template-columns: 5.5rem 7rem 1fr;
+  gap: 0.75rem;
+  padding: 0.15rem 1rem;
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+
+.linea:hover { background: var(--realce); }
+.linea .hora { color: var(--apagado); }
+.linea .quien { color: var(--matiz, var(--apagado)); font-weight: 600; }
+.linea .texto { overflow-wrap: anywhere; }
+.linea.error .texto { color: var(--error); }
+.linea.done  .texto { color: var(--ok); }
+
+.consola-vacia { padding: 2rem 1.25rem; color: var(--apagado); }
+
+/* --- controles --- */
+
+button {
+  font: inherit;
+  background: var(--realce);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--apagado); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:focus-visible { outline: 2px solid var(--backend); outline-offset: 2px; }
+
+button.primario {
+  background: var(--backend);
+  border-color: var(--backend);
+  color: #0E141A;
+  font-weight: 600;
+}
+
+button.icono { padding: 0.15rem 0.5rem; background: none; border: none; color: var(--apagado); }
+button.icono:hover { color: var(--error); }
+
+input {
+  font: inherit;
+  background: var(--panel);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 0.45rem 0.7rem;
+}
+input:focus-visible { outline: 2px solid var(--backend); outline-offset: 1px; }
+
+/* --- tabla y varios --- */
+
+.tabla { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.tabla th, .tabla td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--borde); }
+.tabla th { color: var(--apagado); font-weight: 600; font-size: 0.82rem; }
+
+.fila-alta { display: flex; gap: 0.5rem; align-items: center; }
+.apagado { color: var(--apagado); }
+.error { color: var(--error); }
+
+.pastilla {
+  font-size: 0.78rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--borde);
+  color: var(--apagado);
+}
+.pastilla.viva { color: var(--ok); border-color: var(--ok); }
+.pastilla.muerta { color: var(--error); border-color: var(--error); }
+
+.nav { display: flex; gap: 1rem; }
+.nav a { color: var(--apagado); text-decoration: none; }
+.nav a:hover { color: var(--texto); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

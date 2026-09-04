@@ -1,0 +1,41 @@
+services:
+  backend:
+    build: ./backend
+    container_name: orquesta-backend
+    ports:
+      - "8000:8000"
+    environment:
+      BRAIN: ${BRAIN:-scripted}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # El despliegue queda fuera del contenedor a propósito: el CLI de Vercel
+      # necesita tu sesión local. Corre ./scripts/deploy.sh en el anfitrión.
+      DEPLOY_ENABLED: "false"
+      ORIGENES_PERMITIDOS: http://localhost:3000
+    volumes:
+      # El código generado por los agentes queda visible en el anfitrión.
+      - ./backend/app/generated:/app/app/generated
+      - ./frontend/app/items:/generated-frontend
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build: ./frontend
+    container_name: orquesta-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # El navegador resuelve esta URL, no el contenedor: va a localhost.
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./frontend/app:/app/app
+      - ./frontend/components:/app/components
+      - ./frontend/lib:/app/lib
+      - /app/node_modules
+      - /app/.next

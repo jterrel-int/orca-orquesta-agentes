@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.db
+
+# Código generado por los agentes en cada corrida
+backend/app/generated/item_routes.py
+
+# Node / Next
+node_modules/
+.next/
+out/
+
+# Entorno
+.env
+.env.local
+
+# Vercel
+.vercel
+
+.DS_Store
