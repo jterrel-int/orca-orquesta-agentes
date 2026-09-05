@@ -19,6 +19,7 @@
 
   --ok:      #4FB286;
   --error:   #E0603E;
+  --advertencia: #D9A441;
 
   --radio: 4px;
 
@@ -210,6 +211,18 @@ input:focus-visible { outline: 2px solid var(--backend); outline-offset: 1px; }
 }
 .pastilla.viva { color: var(--ok); border-color: var(--ok); }
 .pastilla.muerta { color: var(--error); border-color: var(--error); }
+
+.aviso-config {
+  background: rgba(217, 164, 65, 0.1);
+  border: 1px solid var(--advertencia);
+  border-radius: var(--radio);
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.85rem;
+}
+.aviso-config strong { color: var(--advertencia); }
+.aviso-config ul { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+.aviso-config li { margin: 0.15rem 0; color: var(--texto); }
 
 .nav { display: flex; gap: 1rem; }
 .nav a { color: var(--apagado); text-decoration: none; }

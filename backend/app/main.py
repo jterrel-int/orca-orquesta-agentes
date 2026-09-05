@@ -88,6 +88,7 @@ async def salud() -> dict[str, Any]:
         "brain": config.brain,
         "deploy_enabled": config.deploy_enabled,
         "conexiones_ws": gestor.n_conexiones,
+        "advertencias": config.advertencias(),
     }
 
 

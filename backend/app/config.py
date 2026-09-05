@@ -1,5 +1,6 @@
 """Configuración del proceso. Todo por variables de entorno, nada hardcodeado."""
 
+import shutil
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,6 +41,31 @@ class Config(BaseSettings):
     @property
     def lista_origenes(self) -> list[str]:
         return [o.strip() for o in self.origenes_permitidos.split(",") if o.strip()]
+
+    def advertencias(self) -> list[str]:
+        """Configuración que no impide arrancar pero probablemente no es la que
+        la persona quiere — por ejemplo, cayó a un respaldo silenciosamente.
+        `/api/health` la expone para que el panel la muestre en vez de que
+        alguien la descubra mirando los logs.
+        """
+        avisos: list[str] = []
+
+        if self.brain == "anthropic" and not self.anthropic_api_key:
+            avisos.append(
+                "BRAIN=anthropic pero falta ANTHROPIC_API_KEY; se está usando el cerebro guionado"
+            )
+
+        if self.deploy_enabled and shutil.which("vercel") is None:
+            avisos.append(
+                "DEPLOY_ENABLED=true pero el CLI de Vercel no está instalado o no está en el PATH"
+            )
+
+        if self.deploy_enabled and not Path(self.vercel_cwd).is_dir():
+            avisos.append(
+                f"DEPLOY_ENABLED=true pero el directorio del frontend no existe: {self.vercel_cwd}"
+            )
+
+        return avisos
 
 
 config = Config()

@@ -1,4 +1,4 @@
-import type { Item, ResumenCorrida } from "./types";
+import type { Item, ResumenCorrida, Salud } from "./types";
 
 export const API =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
@@ -23,8 +23,7 @@ export const lanzarCorrida = () =>
 
 export const estadoCorrida = () => pedir<ResumenCorrida | null>("/api/run/status");
 
-export const salud = () =>
-  pedir<{ ok: boolean; brain: string; deploy_enabled: boolean }>("/api/health");
+export const salud = () => pedir<Salud>("/api/health");
 
 // --- CRUD de items ---
 

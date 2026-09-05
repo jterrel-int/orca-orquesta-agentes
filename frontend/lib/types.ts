@@ -31,5 +31,15 @@ export interface Item {
   creado_en: string;
 }
 
+/** Espeja el cuerpo de GET /api/health. */
+export interface Salud {
+  ok: boolean;
+  brain: string;
+  deploy_enabled: boolean;
+  conexiones_ws: number;
+  /** Configuración que arrancó igual pero probablemente no es la esperada. */
+  advertencias: string[];
+}
+
 /** Los agentes que el dashboard muestra, en el orden del pipeline. */
 export const AGENTES = ["backend", "frontend", "deploy"] as const;
