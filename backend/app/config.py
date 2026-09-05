@@ -38,6 +38,9 @@ class Config(BaseSettings):
     dir_generado_backend: str = str(RAIZ_BACKEND / "app" / "generated")
     dir_generado_frontend: str = str(RAIZ_PROYECTO / "frontend" / "app" / "items")
 
+    # --- backlog ---
+    ruta_backlog: str = str(RAIZ_PROYECTO / "docs" / "BACKLOG.md")
+
     @property
     def lista_origenes(self) -> list[str]:
         return [o.strip() for o in self.origenes_permitidos.split(",") if o.strip()]

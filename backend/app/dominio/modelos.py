@@ -54,3 +54,14 @@ class ResumenCorrida:
     agentes: list[EstadoAgente]
     iniciado_en: str
     terminado_en: str | None = None
+
+
+Lado = Literal["BE", "FE"]
+
+
+@dataclass
+class TareaBacklog:
+    id: str
+    titulo: str
+    cuerpo: str
+    lado: Lado

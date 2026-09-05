@@ -48,7 +48,39 @@ html, body {
 
 a { color: var(--backend); }
 
-/* --- estructura --- */
+/* --- estructura general: sidebar fija + contenido ancho --- */
+
+.app-shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 14rem;
+  flex: none;
+  background: var(--panel);
+  border-right: 1px solid var(--borde);
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.marca { display: flex; flex-direction: column; gap: 0.15rem; }
+.marca strong { font-size: 1.05rem; letter-spacing: 0.02em; }
+.marca .sub { color: var(--apagado); font-size: 0.82rem; }
+
+.nav-lateral { display: flex; flex-direction: column; gap: 0.15rem; }
+.nav-lateral a {
+  color: var(--apagado);
+  text-decoration: none;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radio);
+  font-size: 0.9rem;
+}
+.nav-lateral a:hover { color: var(--texto); background: var(--realce); }
+.nav-lateral a.activo { color: var(--texto); background: var(--realce); font-weight: 600; }
+
+.app-main { flex: 1; min-width: 0; }
+
+/* --- estructura de cada página --- */
 
 .cabecera {
   display: flex;
@@ -69,11 +101,11 @@ a { color: var(--backend); }
 .cabecera .sub { color: var(--apagado); font-size: 0.88rem; }
 .cabecera .derecha { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; }
 
-.contenido { padding: 1.5rem; max-width: 74rem; }
+.contenido { padding: 1.75rem 2rem; max-width: 96rem; margin: 0 auto; }
 
 .rejilla-agentes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.25rem;
 }
@@ -182,7 +214,7 @@ button.primario {
 button.icono { padding: 0.15rem 0.5rem; background: none; border: none; color: var(--apagado); }
 button.icono:hover { color: var(--error); }
 
-input {
+input, textarea, select {
   font: inherit;
   background: var(--panel);
   color: var(--texto);
@@ -190,7 +222,11 @@ input {
   border-radius: var(--radio);
   padding: 0.45rem 0.7rem;
 }
-input:focus-visible { outline: 2px solid var(--backend); outline-offset: 1px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--backend);
+  outline-offset: 1px;
+}
+textarea { resize: vertical; font-family: inherit; }
 
 /* --- tabla y varios --- */
 
@@ -228,9 +264,56 @@ input:focus-visible { outline: 2px solid var(--backend); outline-offset: 1px; }
 .aviso-config ul { margin: 0.35rem 0 0; padding-left: 1.1rem; }
 .aviso-config li { margin: 0.15rem 0; color: var(--texto); }
 
-.nav { display: flex; gap: 1rem; }
-.nav a { color: var(--apagado); text-decoration: none; }
-.nav a:hover { color: var(--texto); }
+/* --- configuración --- */
+
+.lista-config { display: grid; grid-template-columns: minmax(12rem, 18rem) 1fr; gap: 0.6rem 1rem; }
+.lista-config div { display: contents; }
+.lista-config dt { color: var(--apagado); font-size: 0.85rem; }
+.lista-config dd { margin: 0; }
+
+/* --- backlog --- */
+
+.form-tarea {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+  max-width: 46rem;
+}
+
+.rejilla-tareas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: 0.75rem;
+}
+
+.tarjeta-tarea {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 0.9rem 1rem;
+}
+
+.cabecera-tarea { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.5rem; }
+.cabecera-tarea h3 { margin: 0; font-size: 0.95rem; }
+
+.pastilla-lado {
+  font-family: var(--fuente-mono);
+  font-size: 0.75rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  flex: none;
+}
+.pastilla-lado.backend { color: var(--backend); border: 1px solid var(--backend); }
+.pastilla-lado.frontend { color: var(--frontend); border: 1px solid var(--frontend); }
+
+.cuerpo-tarea {
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  color: var(--apagado);
+  max-height: 16rem;
+  overflow-y: auto;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

@@ -5,8 +5,8 @@ SQL ni subprocesos.
 from __future__ import annotations
 
 from .errores import ItemNoEncontrado
-from .modelos import Item
-from .puertos import RepositorioItems
+from .modelos import Item, Lado, TareaBacklog
+from .puertos import RepositorioBacklog, RepositorioItems
 
 
 class ServicioItems:
@@ -35,3 +35,24 @@ class ServicioItems:
         borrado = await self._repo.eliminar(item_id)
         if not borrado:
             raise ItemNoEncontrado(item_id)
+
+
+class ServicioBacklog:
+    def __init__(self, repositorio: RepositorioBacklog) -> None:
+        self._repo = repositorio
+
+    def listar(self) -> list[TareaBacklog]:
+        return self._repo.listar()
+
+    def agregar(self, titulo: str, cuerpo: str, lado: Lado) -> TareaBacklog:
+        tarea = TareaBacklog(id=self._siguiente_id(lado), titulo=titulo, cuerpo=cuerpo, lado=lado)
+        self._repo.agregar(tarea)
+        return tarea
+
+    def _siguiente_id(self, lado: Lado) -> str:
+        numeros = [
+            int(t.id.split("-", 1)[1])
+            for t in self._repo.listar()
+            if t.lado == lado and "-" in t.id and t.id.split("-", 1)[1].isdigit()
+        ]
+        return f"{lado}-{max(numeros, default=0) + 1:02d}"

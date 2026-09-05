@@ -1,7 +1,15 @@
 from .errores import CorridaEnCurso, DespliegueFallido, ErrorDominio, ItemNoEncontrado
-from .modelos import Estado, EstadoAgente, EventoAgente, Item, ResumenCorrida
-from .puertos import Cerebro, Desplegador, PublicadorEventos, RepositorioItems
-from .servicios import ServicioItems
+from .modelos import (
+    Estado,
+    EstadoAgente,
+    EventoAgente,
+    Item,
+    Lado,
+    ResumenCorrida,
+    TareaBacklog,
+)
+from .puertos import Cerebro, Desplegador, PublicadorEventos, RepositorioBacklog, RepositorioItems
+from .servicios import ServicioBacklog, ServicioItems
 
 __all__ = [
     "CorridaEnCurso",
@@ -12,10 +20,14 @@ __all__ = [
     "EstadoAgente",
     "EventoAgente",
     "Item",
+    "Lado",
     "ResumenCorrida",
+    "TareaBacklog",
     "Cerebro",
     "Desplegador",
     "PublicadorEventos",
+    "RepositorioBacklog",
     "RepositorioItems",
+    "ServicioBacklog",
     "ServicioItems",
 ]

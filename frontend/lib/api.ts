@@ -1,4 +1,4 @@
-import type { Item, ResumenCorrida, Salud } from "./types";
+import type { Item, LadoBacklog, ResumenCorrida, Salud, TareaBacklog } from "./types";
 
 export const API =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
@@ -34,5 +34,15 @@ export const crearItem = (name: string) =>
 
 export const eliminarItem = (id: number) =>
   pedir<void>(`/api/items/${id}`, { method: "DELETE" });
+
+// --- backlog ---
+
+export const listarBacklog = () => pedir<TareaBacklog[]>("/api/backlog");
+
+export const agregarTareaBacklog = (datos: {
+  titulo: string;
+  cuerpo: string;
+  lado: LadoBacklog;
+}) => pedir<TareaBacklog>("/api/backlog", { method: "POST", body: JSON.stringify(datos) });
 
 export type { Item };

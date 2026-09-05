@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Protocol, runtime_checkable
 
-from .modelos import EventoAgente, Item
+from .modelos import EventoAgente, Item, TareaBacklog
 
 EmisorLinea = Callable[[str], Awaitable[None]]
 
@@ -45,3 +45,13 @@ class Desplegador(Protocol):
 @runtime_checkable
 class PublicadorEventos(Protocol):
     async def publicar(self, evento: EventoAgente) -> None: ...
+
+
+@runtime_checkable
+class RepositorioBacklog(Protocol):
+    """Lectura y escritura de docs/BACKLOG.md. Sin async: es I/O local chico,
+    no algo por lo que valga la pena hacer esperar al event loop.
+    """
+
+    def listar(self) -> list[TareaBacklog]: ...
+    def agregar(self, tarea: TareaBacklog) -> None: ...

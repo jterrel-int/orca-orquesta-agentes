@@ -1,3 +1,4 @@
+from .backlog_markdown import RepositorioBacklogMarkdown
 from .bus_memoria import BusEventosMemoria, bus
 from .cerebro_anthropic import CerebroAnthropic
 from .cerebro_guionado import CerebroGuionado
@@ -12,6 +13,7 @@ from .persistencia_sqlalchemy import (
 )
 
 __all__ = [
+    "RepositorioBacklogMarkdown",
     "BusEventosMemoria",
     "bus",
     "CerebroAnthropic",

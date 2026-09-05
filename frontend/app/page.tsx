@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 import AgentCard from "@/components/AgentCard";
 import EstadoSistema from "@/components/EstadoSistema";
@@ -36,12 +35,9 @@ export default function Panel() {
   return (
     <>
       <header className="cabecera">
-        <h1>Orquesta</h1>
-        <span className="sub">panel de agentes</span>
+        <h1>Panel</h1>
+        <span className="sub">ejecución de agentes en vivo</span>
         <div className="derecha">
-          <nav className="nav">
-            <Link href="/items">Items</Link>
-          </nav>
           <span
             className={`pastilla ${conexion === "conectado" ? "viva" : conexion === "desconectado" ? "muerta" : ""}`}
           >

@@ -39,7 +39,19 @@ export interface Salud {
   conexiones_ws: number;
   /** Configuración que arrancó igual pero probablemente no es la esperada. */
   advertencias: string[];
+  vercel_token_configurado: boolean;
+  origenes_permitidos: string[];
 }
 
 /** Los agentes que el dashboard muestra, en el orden del pipeline. */
 export const AGENTES = ["backend", "frontend", "deploy"] as const;
+
+export type LadoBacklog = "BE" | "FE";
+
+/** Espeja una tarea parseada de docs/BACKLOG.md. */
+export interface TareaBacklog {
+  id: string;
+  titulo: string;
+  cuerpo: string;
+  lado: LadoBacklog;
+}

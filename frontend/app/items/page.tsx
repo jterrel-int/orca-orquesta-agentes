@@ -1,4 +1,3 @@
-import Link from "next/link";
 import ListaItems from "./ListaItems";
 
 export default function PaginaItems() {
@@ -7,11 +6,6 @@ export default function PaginaItems() {
       <header className="cabecera">
         <h1>Items</h1>
         <span className="sub">CRUD servido por el backend</span>
-        <div className="derecha">
-          <nav className="nav">
-            <Link href="/">Panel</Link>
-          </nav>
-        </div>
       </header>
 
       <main className="contenido">
