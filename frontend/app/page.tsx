@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import AgentCard from "@/components/AgentCard";
-import AvisoConfiguracion from "@/components/AvisoConfiguracion";
+import EstadoSistema from "@/components/EstadoSistema";
 import LogStream from "@/components/LogStream";
 import RunButton from "@/components/RunButton";
 import { useEventos } from "@/lib/ws";
@@ -51,7 +51,7 @@ export default function Panel() {
       </header>
 
       <main className="contenido">
-        <AvisoConfiguracion />
+        <EstadoSistema />
 
         <div style={{ marginBottom: "1.25rem" }}>
           <RunButton activo={corriendo} />
