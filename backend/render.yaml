@@ -1,0 +1,24 @@
+# Blueprint de Render para desplegar el backend como servicio público.
+# Ver la sección "Despliegue a Vercel" del README para el flujo completo:
+# el frontend va a Vercel, el backend va acá, y NEXT_PUBLIC_API_URL /
+# ORIGENES_PERMITIDOS se apuntan uno al otro después de que ambos tengan URL.
+services:
+  - type: web
+    name: orquesta-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: BRAIN
+        value: scripted
+      # Apagado a propósito, igual que en local. No lo actives acá salvo que
+      # de verdad quieras que este servicio ejecute `vercel --prod`.
+      - key: DEPLOY_ENABLED
+        value: "false"
+      # Se completa a mano una vez que el frontend tiene su dominio de Vercel
+      # (no se conoce hasta después del primer deploy del frontend).
+      - key: ORIGENES_PERMITIDOS
+        sync: false

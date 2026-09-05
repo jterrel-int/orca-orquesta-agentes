@@ -142,14 +142,73 @@ un agente es un generador de texto con permisos de escritura.
 El `DeployAgent` está **apagado por defecto** (`DEPLOY_ENABLED=false`). Con eso
 registra el comando exacto que ejecutaría y termina bien.
 
-Para desplegar de verdad:
+### El problema que hay que resolver primero
+
+Vercel solo aloja el frontend. Si lo desplegás mientras FastAPI corre en tu
+laptop, el sitio en la nube apunta a `http://localhost:8000` **desde el
+navegador de quien lo visite**, que no es tu máquina. El panel se ve roto: "WS
+caído" y la tabla de items nunca carga. Hay tres salidas:
+
+| Opción | Cuándo sirve | Costo |
+|---|---|---|
+| **Backend público** (Render/Railway/Fly) | La única en la que la URL funciona de verdad para cualquiera | Configurar un hosting más |
+| **Túnel** (`cloudflared tunnel --url http://localhost:8000`) | Un demo en vivo, ahora mismo | La URL expira y depende de que tu laptop esté prendida |
+| **Solo frontend** | No hay tiempo de configurar nada más | El panel muestra "WS caído" a propósito — decilo en la demo en vez de que alguien lo descubra |
+
+Este repo usa la primera: **el backend vive en Render** (`backend/render.yaml`
+ya está listo como Blueprint). Elegilo si tu caso es distinto — no hay nada
+en el código que dependa de Render específicamente.
+
+### Backend en Render
+
+1. Conectá el repo en [render.com](https://render.com) → "New Blueprint" →
+   apuntá a `backend/render.yaml`. Render crea el servicio `orquesta-backend`
+   con `pip install -r requirements.txt` como build y
+   `uvicorn app.main:app --host 0.0.0.0 --port $PORT` como start.
+2. Anotá la URL que te da (algo como `https://orquesta-backend.onrender.com`).
+   `GET /api/health` en esa URL confirma que está vivo.
+3. `ORIGENES_PERMITIDOS` queda sin completar a propósito (depende del dominio
+   de Vercel, que todavía no existe) — lo llenás en el paso 5.
+
+> La base SQLite del plan gratuito de Render es efímera: se reinicia en cada
+> deploy. Suficiente para un demo; no para datos que necesiten sobrevivir un
+> restart. No es un problema que este repo intente resolver.
+
+### Frontend en Vercel
 
 ```bash
 npm i -g vercel
-cd frontend && vercel        # vincula el proyecto la primera vez
+cd frontend && vercel        # vincula el proyecto la primera vez, crea .vercel/
 ```
 
-Luego, o bien manualmente:
+4. Configurá `NEXT_PUBLIC_API_URL` como variable de entorno de producción,
+   apuntando a la URL de Render del paso 2:
+
+   ```bash
+   vercel env add NEXT_PUBLIC_API_URL production
+   # pegá: https://orquesta-backend.onrender.com
+   ```
+
+   (o desde el dashboard de Vercel → Settings → Environment Variables). Como
+   `NEXT_PUBLIC_*` se hornea en el build, hace falta un deploy nuevo después
+   de agregarla: `vercel --prod`.
+
+5. Volvé a Render y completá `ORIGENES_PERMITIDOS` con el dominio que Vercel
+   te dio (`https://tu-proyecto.vercel.app`), sin la barra final. Sin esto el
+   CORS bloquea todo. Redeployá el servicio para que tome el cambio.
+
+6. `https://` en el frontend implica que el WebSocket tiene que ser `wss://`,
+   no `ws://` — si no, el navegador lo rechaza por mixed content.
+   `frontend/lib/ws.ts` expone `urlWebSocket()` justamente para esta
+   conversión, y `frontend/lib/ws.test.ts` la confirma con una prueba
+   (`npm run test` en `frontend/`):
+
+   ```ts
+   urlWebSocket("https://orquesta-backend.onrender.com")
+   // => "wss://orquesta-backend.onrender.com/ws"
+   ```
+
+### El DeployAgent hace lo mismo que el paso 4
 
 ```bash
 ./scripts/deploy.sh
@@ -163,7 +222,9 @@ VERCEL_TOKEN=...     # opcional; si no, usa tu sesión local
 ```
 
 El agente lanza el subproceso real, transmite su stdout línea por línea al
-panel, extrae la URL de producción y falla si el código de salida no es cero.
+panel, extrae la URL de producción y falla si el código de salida no es cero
+— mismo comportamiento que `vercel --prod` a mano, verificado en
+`backend/tests/test_despliegue.py` con un subproceso simulado.
 
 > El despliegue no corre dentro de Docker: el CLI de Vercel necesita tu sesión
 > local. Ejecútalo en el anfitrión.

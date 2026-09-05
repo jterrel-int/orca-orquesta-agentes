@@ -7,6 +7,14 @@ import type { EventoAgente } from "./types";
 export type EstadoConexion = "conectando" | "conectado" | "desconectado";
 
 /**
+ * http(s) -> ws(s). Con el backend en Render (https) y el frontend en Vercel,
+ * esto tiene que dar wss:// o el navegador rechaza la conexión por mixed content.
+ */
+export function urlWebSocket(apiUrl: string): string {
+  return apiUrl.replace(/^http/, "ws") + "/ws";
+}
+
+/**
  * Conexión al canal de eventos con reconexión y retroceso exponencial.
  *
  * El backend reenvía su historial al conectar, así que una pestaña abierta a
@@ -23,7 +31,7 @@ export function useEventos(maxEventos = 300) {
   const conectar = useCallback(() => {
     if (!vivoRef.current) return;
 
-    const url = API.replace(/^http/, "ws") + "/ws";
+    const url = urlWebSocket(API);
     setConexion("conectando");
 
     let ws: WebSocket;
