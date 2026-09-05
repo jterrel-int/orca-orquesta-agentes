@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from ..adaptadores.fabricas import construir_cerebro
 from ..config import config
+from ..dominio.puertos import Cerebro
 from .base import Agente, ContextoCorrida
-from .cerebros import Cerebro, construir_cerebro
 from .plantillas import LISTA_ITEMS_TSX
 
 INSTRUCCION = (

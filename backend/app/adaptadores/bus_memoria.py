@@ -1,19 +1,25 @@
-"""Bus de eventos en memoria, publicación/suscripción sobre asyncio.
+"""Adaptador del puerto PublicadorEventos: bus en memoria, pub/sub sobre asyncio.
 
 Desacopla a los agentes del transporte. Un agente publica; quien quiera escucha.
 Hoy escucha el WebSocket; mañana podría escuchar un logger o una cola.
+
+Un único consumidor del bus retransmite a todos los clientes conectados, en vez
+de una suscripción por cliente. Así el bus no crece con el número de pestañas
+abiertas (ver websocket/manager.py).
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
 from collections.abc import AsyncIterator
 
-from ..models.eventos import EventoAgente
+from ..dominio.modelos import EventoAgente
 
 log = logging.getLogger(__name__)
 
 
-class BusEventos:
+class BusEventosMemoria:
     def __init__(self, tam_cola: int = 512) -> None:
         self._suscriptores: set[asyncio.Queue[EventoAgente]] = set()
         self._tam_cola = tam_cola
@@ -52,4 +58,4 @@ class BusEventos:
         return len(self._suscriptores)
 
 
-bus = BusEventos()
+bus = BusEventosMemoria()

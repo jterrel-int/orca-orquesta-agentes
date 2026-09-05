@@ -17,12 +17,13 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from ..adaptadores.bus_memoria import bus
 from ..agents.backend_agent import BackendAgent
 from ..agents.base import Agente, ContextoCorrida, ResultadoAgente
 from ..agents.deploy_agent import DeployAgent
 from ..agents.frontend_agent import FrontendAgent
-from ..models.eventos import EstadoAgente, EventoAgente, ResumenCorrida
-from .eventos import BusEventos, bus
+from ..dominio.modelos import EstadoAgente, EventoAgente, ResumenCorrida
+from ..dominio.puertos import PublicadorEventos
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def _ahora_iso() -> str:
 
 
 class Orquestador:
-    def __init__(self, bus_eventos: BusEventos | None = None) -> None:
+    def __init__(self, bus_eventos: PublicadorEventos | None = None) -> None:
         self._bus = bus_eventos or bus
         self._corriendo = False
         self._lock = asyncio.Lock()

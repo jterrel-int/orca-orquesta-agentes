@@ -1,13 +1,14 @@
 """Disparo y consulta de corridas de agentes."""
 
 import asyncio
+import dataclasses
 import logging
 from collections.abc import Callable
 
 from fastapi import APIRouter, HTTPException, status
 
-from ..models.eventos import ResumenCorrida
-from ..orchestrator.eventos import bus
+from ..adaptadores.bus_memoria import bus
+from ..dominio.modelos import ResumenCorrida
 from ..orchestrator.orquestador import orquestador
 
 log = logging.getLogger(__name__)
@@ -61,4 +62,4 @@ async def estado_corrida() -> ResumenCorrida | None:
 @router.get("/events")
 async def historial_eventos() -> list[dict]:
     """Historial en memoria, para clientes que no usan WebSocket."""
-    return [e.model_dump() for e in bus.historial()]
+    return [dataclasses.asdict(e) for e in bus.historial()]

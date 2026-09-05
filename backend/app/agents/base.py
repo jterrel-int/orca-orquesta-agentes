@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from ..models.eventos import Estado, EventoAgente
+from ..dominio.modelos import Estado, EventoAgente
 
 Emisor = Callable[[EventoAgente], Awaitable[None]]
 

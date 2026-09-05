@@ -1,47 +1,16 @@
-"""El punto exacto donde un agente determinista se convierte en uno con LLM.
-
-Los agentes no llaman a ninguna API: le piden a su `Cerebro` que produzca el
-contenido. Cambiar BRAIN=anthropic en el entorno cambia de determinista a LLM
-sin tocar una línea de los agentes ni del orquestador.
-"""
+"""Adaptador real del puerto Cerebro contra la API de mensajes de Anthropic."""
 
 from __future__ import annotations
 
 import logging
-from typing import Protocol, runtime_checkable
 
 import httpx
-
-from ..config import config
 
 log = logging.getLogger(__name__)
 
 
-@runtime_checkable
-class Cerebro(Protocol):
-    """Produce texto a partir de una instrucción y un contexto."""
-
-    async def pensar(self, instruccion: str, contexto: str = "", *, respaldo: str = "") -> str:
-        ...
-
-
-class CerebroGuionado:
-    """Devuelve el respaldo tal cual. Determinista, sin red, sin clave.
-
-    Es el modo por defecto: un demo en vivo no debería depender de una API
-    externa ni de una clave que puede no estar configurada.
-    """
-
-    nombre = "scripted"
-
-    async def pensar(self, instruccion: str, contexto: str = "", *, respaldo: str = "") -> str:
-        return respaldo
-
-
 class CerebroAnthropic:
-    """Implementación real contra la API de mensajes.
-
-    Si la llamada falla por cualquier motivo, cae al respaldo determinista en
+    """Si la llamada falla por cualquier motivo, cae al respaldo determinista en
     lugar de tumbar la corrida. Un agente sin red debe degradar, no explotar.
     """
 
@@ -79,13 +48,3 @@ class CerebroAnthropic:
         except Exception as e:  # noqa: BLE001
             log.warning("Cerebro Anthropic falló (%s); se usa el respaldo", e)
             return respaldo
-
-
-def construir_cerebro() -> Cerebro:
-    """Fábrica según configuración. Si falta la clave, cae a guionado y lo avisa."""
-    if config.brain == "anthropic":
-        if not config.anthropic_api_key:
-            log.warning("BRAIN=anthropic pero falta ANTHROPIC_API_KEY; se usa el guionado")
-            return CerebroGuionado()
-        return CerebroAnthropic(config.anthropic_api_key, config.anthropic_model)
-    return CerebroGuionado()

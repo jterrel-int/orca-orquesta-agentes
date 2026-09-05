@@ -10,10 +10,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .adaptadores.persistencia_sqlalchemy import crear_tablas
 from .api import corridas_router, items_router
 from .api.corridas import registrar_post_corrida
 from .config import config
-from .db.session import crear_tablas
 from .websocket import gestor, ws_router
 
 logging.basicConfig(

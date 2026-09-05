@@ -8,12 +8,14 @@ abiertas.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
+import json
 import logging
 
 from fastapi import WebSocket
 
-from ..models.eventos import EventoAgente
-from ..orchestrator.eventos import bus
+from ..adaptadores.bus_memoria import bus
+from ..dominio.modelos import EventoAgente
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ class GestorConexiones:
 
     async def _enviar(self, ws: WebSocket, evento: EventoAgente) -> bool:
         try:
-            await ws.send_text(evento.model_dump_json())
+            await ws.send_text(json.dumps(dataclasses.asdict(evento)))
             return True
         except Exception:  # noqa: BLE001 — cliente caído, no es un error del servidor
             return False

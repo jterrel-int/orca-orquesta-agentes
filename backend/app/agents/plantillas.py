@@ -11,58 +11,54 @@ terminar la corrida de agentes.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.session import obtener_sesion
-from ..models.item import Item, ItemActualizar, ItemCrear, ItemLeer
+from ..adaptadores.persistencia_sqlalchemy import RepositorioItemsSQLAlchemy, obtener_sesion
+from ..api.items import ItemActualizar, ItemCrear, ItemLeer, item_a_leer
+from ..dominio.errores import ItemNoEncontrado
+from ..dominio.servicios import ServicioItems
 
 router = APIRouter(prefix="/api/items", tags=["items (generado)"])
 
 
+async def _servicio(sesion: AsyncSession = Depends(obtener_sesion)) -> ServicioItems:
+    return ServicioItems(RepositorioItemsSQLAlchemy(sesion))
+
+
 @router.get("", response_model=list[ItemLeer])
-async def listar(sesion: AsyncSession = Depends(obtener_sesion)) -> list[Item]:
-    resultado = await sesion.execute(select(Item).order_by(Item.id.desc()))
-    return list(resultado.scalars().all())
+async def listar(servicio: ServicioItems = Depends(_servicio)) -> list[ItemLeer]:
+    return [item_a_leer(i) for i in await servicio.listar()]
 
 
 @router.post("", response_model=ItemLeer, status_code=status.HTTP_201_CREATED)
-async def crear(datos: ItemCrear, sesion: AsyncSession = Depends(obtener_sesion)) -> Item:
-    item = Item(name=datos.name)
-    sesion.add(item)
-    await sesion.commit()
-    await sesion.refresh(item)
-    return item
+async def crear(datos: ItemCrear, servicio: ServicioItems = Depends(_servicio)) -> ItemLeer:
+    return item_a_leer(await servicio.crear(datos.name))
 
 
 @router.get("/{item_id}", response_model=ItemLeer)
-async def obtener(item_id: int, sesion: AsyncSession = Depends(obtener_sesion)) -> Item:
-    item = await sesion.get(Item, item_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Item no encontrado")
-    return item
+async def obtener(item_id: int, servicio: ServicioItems = Depends(_servicio)) -> ItemLeer:
+    try:
+        return item_a_leer(await servicio.obtener(item_id))
+    except ItemNoEncontrado as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.put("/{item_id}", response_model=ItemLeer)
 async def actualizar(
-    item_id: int, datos: ItemActualizar, sesion: AsyncSession = Depends(obtener_sesion)
-) -> Item:
-    item = await sesion.get(Item, item_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Item no encontrado")
-    item.name = datos.name
-    await sesion.commit()
-    await sesion.refresh(item)
-    return item
+    item_id: int, datos: ItemActualizar, servicio: ServicioItems = Depends(_servicio)
+) -> ItemLeer:
+    try:
+        return item_a_leer(await servicio.actualizar(item_id, datos.name))
+    except ItemNoEncontrado as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def eliminar(item_id: int, sesion: AsyncSession = Depends(obtener_sesion)) -> None:
-    item = await sesion.get(Item, item_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Item no encontrado")
-    await sesion.delete(item)
-    await sesion.commit()
+async def eliminar(item_id: int, servicio: ServicioItems = Depends(_servicio)) -> None:
+    try:
+        await servicio.eliminar(item_id)
+    except ItemNoEncontrado as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 '''
 
 

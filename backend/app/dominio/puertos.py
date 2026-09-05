@@ -1,0 +1,47 @@
+"""Puertos: los Protocol que separan el dominio de la infraestructura.
+
+Cada uno tiene (al menos) dos adaptadores reales en app/adaptadores/. El
+cableado — qué implementación concreta se usa — vive en adaptadores/fabricas.py
+y en config.py; el dominio solo conoce estas formas.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from typing import Protocol, runtime_checkable
+
+from .modelos import EventoAgente, Item
+
+EmisorLinea = Callable[[str], Awaitable[None]]
+
+
+@runtime_checkable
+class RepositorioItems(Protocol):
+    async def listar(self) -> list[Item]: ...
+    async def crear(self, name: str) -> Item: ...
+    async def obtener(self, item_id: int) -> Item | None: ...
+    async def actualizar(self, item_id: int, name: str) -> Item | None: ...
+    async def eliminar(self, item_id: int) -> bool: ...
+
+
+@runtime_checkable
+class Cerebro(Protocol):
+    """Produce texto a partir de una instrucción y un contexto."""
+
+    async def pensar(self, instruccion: str, contexto: str = "", *, respaldo: str = "") -> str: ...
+
+
+@runtime_checkable
+class Desplegador(Protocol):
+    """Corre el despliegue y reporta cada línea de salida por `on_linea`.
+
+    Devuelve la URL de producción si la hay, o None. Lanza DespliegueFallido
+    si el despliegue no se completó.
+    """
+
+    async def ejecutar(self, on_linea: EmisorLinea) -> str | None: ...
+
+
+@runtime_checkable
+class PublicadorEventos(Protocol):
+    async def publicar(self, evento: EventoAgente) -> None: ...
