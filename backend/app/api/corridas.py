@@ -4,6 +4,7 @@ import asyncio
 import dataclasses
 import logging
 from collections.abc import Callable
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -17,16 +18,17 @@ router = APIRouter(prefix="/api", tags=["corridas"])
 
 # Ganchos que se ejecutan al terminar una corrida. main.py registra aquí el
 # montaje del router generado. Evita que este módulo importe la app y con ello
-# un ciclo de importación.
-_ganchos_post_corrida: list[Callable[[], None]] = []
+# un ciclo de importación. El valor de retorno no importa; por eso el tipo es
+# object y no None: montar_router_generado devuelve bool y no hace falta envolverlo.
+_ganchos_post_corrida: list[Callable[[], object]] = []
 
 
-def registrar_post_corrida(fn: Callable[[], None]) -> None:
+def registrar_post_corrida(fn: Callable[[], object]) -> None:
     _ganchos_post_corrida.append(fn)
 
 
 @router.post("/run", status_code=status.HTTP_202_ACCEPTED)
-async def lanzar_corrida() -> dict:
+async def lanzar_corrida() -> dict[str, Any]:
     """Lanza el pipeline en segundo plano y responde de inmediato.
 
     El progreso viaja por el WebSocket, no por esta respuesta: mantener la
@@ -60,6 +62,6 @@ async def estado_corrida() -> ResumenCorrida | None:
 
 
 @router.get("/events")
-async def historial_eventos() -> list[dict]:
+async def historial_eventos() -> list[dict[str, Any]]:
     """Historial en memoria, para clientes que no usan WebSocket."""
     return [dataclasses.asdict(e) for e in bus.historial()]

@@ -8,14 +8,14 @@ a lo que necesite cada borde (filas de SQLAlchemy, esquemas de FastAPI, JSON).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 Estado = Literal["pending", "running", "done", "error"]
 
 
 def _ahora_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass

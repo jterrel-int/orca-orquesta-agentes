@@ -10,6 +10,7 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from ..dominio.modelos import Estado, EventoAgente
 
@@ -26,7 +27,7 @@ class ContextoCorrida:
 
     run_id: str
     emitir: Emisor
-    datos: dict = field(default_factory=dict)
+    datos: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -43,8 +44,13 @@ class Agente(ABC):
 
     name: str = "agente"
 
-    async def log(self, ctx: ContextoCorrida, msg: str, status: Estado = "running",
-                  artifacts: list[str] | None = None) -> None:
+    async def log(
+        self,
+        ctx: ContextoCorrida,
+        msg: str,
+        status: Estado = "running",
+        artifacts: list[str] | None = None,
+    ) -> None:
         await ctx.emitir(
             EventoAgente(
                 agent=self.name,

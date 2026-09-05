@@ -54,8 +54,13 @@ class BackendAgent(Agente):
         archivo.write_text(codigo, encoding="utf-8")
         await asyncio.sleep(0.3)
 
-        rutas = ["GET /api/items", "POST /api/items", "GET /api/items/{id}",
-                 "PUT /api/items/{id}", "DELETE /api/items/{id}"]
+        rutas = [
+            "GET /api/items",
+            "POST /api/items",
+            "GET /api/items/{id}",
+            "PUT /api/items/{id}",
+            "DELETE /api/items/{id}",
+        ]
         # Canal hacia el FrontendAgent. No hay llamada directa entre agentes.
         ctx.datos["endpoints"] = rutas
         ctx.datos["router_generado"] = str(archivo)

@@ -42,7 +42,9 @@ class CerebroAnthropic:
                 r = await cliente.post(self.URL, json=cuerpo, headers=cabeceras)
                 r.raise_for_status()
                 datos = r.json()
-            partes = [b.get("text", "") for b in datos.get("content", []) if b.get("type") == "text"]
+            partes = [
+                b.get("text", "") for b in datos.get("content", []) if b.get("type") == "text"
+            ]
             texto = "\n".join(p for p in partes if p).strip()
             return texto or respaldo
         except Exception as e:  # noqa: BLE001

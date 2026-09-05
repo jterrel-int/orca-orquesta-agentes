@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,7 +51,7 @@ def montar_router_generado(app: FastAPI) -> bool:
 
 
 @asynccontextmanager
-async def ciclo_vida(app: FastAPI):
+async def ciclo_vida(app: FastAPI) -> AsyncIterator[None]:
     await crear_tablas()
     await gestor.iniciar_retransmision()
     montar_router_generado(app)
@@ -80,7 +82,7 @@ app.include_router(ws_router)
 
 
 @app.get("/api/health", tags=["salud"])
-async def salud() -> dict:
+async def salud() -> dict[str, Any]:
     return {
         "ok": True,
         "brain": config.brain,
@@ -90,7 +92,7 @@ async def salud() -> dict:
 
 
 @app.post("/api/generated/reload", tags=["salud"])
-async def recargar_generado() -> dict:
+async def recargar_generado() -> dict[str, Any]:
     """Vuelve a montar el router generado sin reiniciar el proceso."""
     montado = montar_router_generado(app)
     return {"montado": montado}

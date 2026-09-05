@@ -7,7 +7,7 @@ SQLAlchemy ni la fila ORM; el resto de la app trabaja con dominio.modelos.Item.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Integer, String, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -22,7 +22,7 @@ class Base(DeclarativeBase):
 
 
 def _ahora() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class ItemORM(Base):

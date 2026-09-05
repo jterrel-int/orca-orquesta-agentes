@@ -62,7 +62,7 @@ async def eliminar(item_id: int, servicio: ServicioItems = Depends(_servicio)) -
 '''
 
 
-LISTA_ITEMS_TSX = '''// Generado por FrontendAgent — no editar a mano.
+LISTA_ITEMS_TSX = """// Generado por FrontendAgent — no editar a mano.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -151,4 +151,4 @@ export default function ListaItems() {
     </div>
   );
 }
-'''
+"""

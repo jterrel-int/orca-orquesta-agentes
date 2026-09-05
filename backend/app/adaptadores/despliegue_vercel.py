@@ -51,13 +51,13 @@ class DespliegueVercel:
                 if not texto:
                     continue
                 if "https://" in texto and url_produccion is None:
-                    url_produccion = texto[texto.index("https://"):].split()[0]
+                    url_produccion = texto[texto.index("https://") :].split()[0]
                 await on_linea(texto)
 
         try:
             await asyncio.wait_for(bombear(), timeout=config.deploy_timeout_s)
             codigo = await asyncio.wait_for(proceso.wait(), timeout=30)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proceso.kill()
             await proceso.wait()
             raise DespliegueFallido(

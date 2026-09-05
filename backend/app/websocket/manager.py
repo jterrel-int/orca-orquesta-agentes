@@ -8,6 +8,7 @@ abiertas.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import json
 import logging
@@ -23,7 +24,7 @@ log = logging.getLogger(__name__)
 class GestorConexiones:
     def __init__(self) -> None:
         self._conexiones: set[WebSocket] = set()
-        self._tarea: asyncio.Task | None = None
+        self._tarea: asyncio.Task[None] | None = None
 
     async def conectar(self, ws: WebSocket) -> None:
         await ws.accept()
@@ -59,10 +60,8 @@ class GestorConexiones:
     async def detener_retransmision(self) -> None:
         if self._tarea:
             self._tarea.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._tarea
-            except asyncio.CancelledError:
-                pass
             self._tarea = None
 
     async def _bucle(self) -> None:

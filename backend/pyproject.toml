@@ -1,0 +1,31 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/agents/plantillas.py" = ["E501"]
+
+# `Depends(...)` como valor por defecto es el idiom de FastAPI, no una llamada
+# accidental: Depends() devuelve un centinela que FastAPI resuelve por request.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = "app.dominio.*"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "app.adaptadores.*"
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

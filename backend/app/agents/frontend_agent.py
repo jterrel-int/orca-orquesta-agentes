@@ -47,7 +47,9 @@ class FrontendAgent(Agente):
         codigo = _limpiar_cercas(codigo)
 
         if "export default" not in codigo:
-            await self.log(ctx, "El componente generado no exporta por defecto; se usa la plantilla")
+            await self.log(
+                ctx, "El componente generado no exporta por defecto; se usa la plantilla"
+            )
             codigo = LISTA_ITEMS_TSX
 
         archivo = destino / "ListaItems.tsx"

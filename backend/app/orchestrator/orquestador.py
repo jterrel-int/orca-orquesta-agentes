@@ -15,21 +15,23 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Literal
 
 from ..adaptadores.bus_memoria import bus
 from ..agents.backend_agent import BackendAgent
 from ..agents.base import Agente, ContextoCorrida, ResultadoAgente
 from ..agents.deploy_agent import DeployAgent
 from ..agents.frontend_agent import FrontendAgent
-from ..dominio.modelos import EstadoAgente, EventoAgente, ResumenCorrida
+from ..dominio.errores import CorridaEnCurso
+from ..dominio.modelos import Estado, EstadoAgente, EventoAgente, ResumenCorrida
 from ..dominio.puertos import PublicadorEventos
 
 log = logging.getLogger(__name__)
 
 
 def _ahora_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class Orquestador:
@@ -64,7 +66,7 @@ class Orquestador:
         """Corre el pipeline completo. Una sola corrida a la vez."""
         async with self._lock:
             if self._corriendo:
-                raise RuntimeError("Ya hay una corrida en curso")
+                raise CorridaEnCurso("Ya hay una corrida en curso")
             self._corriendo = True
 
         run_id = uuid.uuid4().hex[:8]
@@ -80,8 +82,12 @@ class Orquestador:
 
         ctx = ContextoCorrida(run_id=run_id, emitir=self._bus.publicar)
         await self._bus.publicar(
-            EventoAgente(agent="orchestrator", status="running",
-                         msg=f"Corrida {run_id} iniciada · {len(etapas)} etapas", run_id=run_id)
+            EventoAgente(
+                agent="orchestrator",
+                status="running",
+                msg=f"Corrida {run_id} iniciada · {len(etapas)} etapas",
+                run_id=run_id,
+            )
         )
 
         hubo_error = False
@@ -91,15 +97,23 @@ class Orquestador:
                     for agente in etapa:
                         self._marcar(agente.name, "pending", "Omitido por fallo previo")
                         await self._bus.publicar(
-                            EventoAgente(agent=agente.name, status="error",
-                                         msg="Omitido: una etapa anterior falló", run_id=run_id)
+                            EventoAgente(
+                                agent=agente.name,
+                                status="error",
+                                msg="Omitido: una etapa anterior falló",
+                                run_id=run_id,
+                            )
                         )
                     continue
 
                 etiqueta = ", ".join(a.name for a in etapa)
                 await self._bus.publicar(
-                    EventoAgente(agent="orchestrator", status="running",
-                                 msg=f"Etapa {i}/{len(etapas)}: {etiqueta}", run_id=run_id)
+                    EventoAgente(
+                        agent="orchestrator",
+                        status="running",
+                        msg=f"Etapa {i}/{len(etapas)}: {etiqueta}",
+                        run_id=run_id,
+                    )
                 )
 
                 resultados = await asyncio.gather(
@@ -118,7 +132,7 @@ class Orquestador:
                     if resultado.status == "error":
                         hubo_error = True
 
-            estado_final = "error" if hubo_error else "done"
+            estado_final: Literal["done", "error"] = "error" if hubo_error else "done"
             self._resumen.status = estado_final
             self._resumen.terminado_en = _ahora_iso()
 
@@ -143,10 +157,10 @@ class Orquestador:
                 est.ultimo_msg = resultado.msg
                 est.duracion_s = round(resultado.duracion_s, 2)
 
-    def _marcar(self, nombre: str, estado: str, msg: str) -> None:
+    def _marcar(self, nombre: str, estado: Estado, msg: str) -> None:
         for est in self._resumen.agentes:  # type: ignore[union-attr]
             if est.agent == nombre:
-                est.status = estado  # type: ignore[assignment]
+                est.status = estado
                 est.ultimo_msg = msg
 
 

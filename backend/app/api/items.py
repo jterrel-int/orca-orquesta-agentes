@@ -37,6 +37,10 @@ class ItemLeer(BaseModel):
 
 def item_a_leer(item: Item) -> ItemLeer:
     """Traduce el dominio a la forma que responde la API. Reusado por el router generado."""
+    # id y creado_en son Optional en el dominio (un Item podría no estar persistido
+    # todavía), pero todo lo que sale del repositorio ya pasó por la base de datos.
+    assert item.id is not None
+    assert item.creado_en is not None
     return ItemLeer(id=item.id, name=item.name, creado_en=item.creado_en)
 
 
@@ -79,9 +83,7 @@ async def actualizar(
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def eliminar(
-    item_id: int, servicio: ServicioItems = Depends(obtener_servicio_items)
-) -> None:
+async def eliminar(item_id: int, servicio: ServicioItems = Depends(obtener_servicio_items)) -> None:
     try:
         await servicio.eliminar(item_id)
     except ItemNoEncontrado as e:
