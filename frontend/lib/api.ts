@@ -1,4 +1,12 @@
-import type { Item, LadoBacklog, ResumenCorrida, Salud, TareaBacklog } from "./types";
+import type {
+  EstadoRender,
+  EstadoVercel,
+  Item,
+  LadoBacklog,
+  ResumenCorrida,
+  Salud,
+  TareaBacklog,
+} from "./types";
 
 export const API =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
@@ -44,5 +52,26 @@ export const agregarTareaBacklog = (datos: {
   cuerpo: string;
   lado: LadoBacklog;
 }) => pedir<TareaBacklog>("/api/backlog", { method: "POST", body: JSON.stringify(datos) });
+
+// --- conexión con Vercel (OAuth) ---
+
+/** URL para abrir en una ventana emergente; el backend redirige a Vercel. */
+export const urlConectarVercel = () => `${API}/api/vercel/oauth/iniciar`;
+
+export const estadoVercel = () => pedir<EstadoVercel>("/api/vercel/estado");
+
+export const desconectarVercel = () => pedir<void>("/api/vercel/conexion", { method: "DELETE" });
+
+// --- conexión con Render (API key) ---
+
+export const estadoRender = () => pedir<EstadoRender>("/api/render/estado");
+
+export const conectarRender = (apiKey: string) =>
+  pedir<EstadoRender>("/api/render/conexion", {
+    method: "POST",
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+
+export const desconectarRender = () => pedir<void>("/api/render/conexion", { method: "DELETE" });
 
 export type { Item };

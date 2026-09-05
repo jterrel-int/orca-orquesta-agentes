@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .adaptadores.persistencia_sqlalchemy import crear_tablas
-from .api import backlog_router, corridas_router, items_router
+from .api import backlog_router, corridas_router, items_router, render_router, vercel_router
 from .api.corridas import registrar_post_corrida
 from .config import config
 from .websocket import gestor, ws_router
@@ -79,6 +79,8 @@ app.add_middleware(
 app.include_router(items_router)
 app.include_router(corridas_router)
 app.include_router(backlog_router)
+app.include_router(vercel_router)
+app.include_router(render_router)
 app.include_router(ws_router)
 
 

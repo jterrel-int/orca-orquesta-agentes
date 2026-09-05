@@ -41,6 +41,19 @@ class Config(BaseSettings):
     # --- backlog ---
     ruta_backlog: str = str(RAIZ_PROYECTO / "docs" / "BACKLOG.md")
 
+    # --- integración OAuth con Vercel ---
+    # Se registra a mano en vercel.com/dashboard → Integrations Console. Sin
+    # estas tres, /api/vercel/oauth/iniciar responde 500 en vez de adivinar.
+    vercel_client_id: str | None = None
+    vercel_client_secret: str | None = None
+    vercel_integration_slug: str | None = None
+    vercel_oauth_redirect_uri: str = "http://localhost:8000/api/vercel/oauth/callback"
+
+    # --- conexión con Render ---
+    # Sin OAuth de parte de Render: es una API key pegada a mano y verificada
+    # contra su API antes de guardarla.
+    render_service_name: str = "orquesta-backend"
+
     @property
     def lista_origenes(self) -> list[str]:
         return [o.strip() for o in self.origenes_permitidos.split(",") if o.strip()]

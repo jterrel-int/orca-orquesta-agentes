@@ -55,3 +55,19 @@ export interface TareaBacklog {
   cuerpo: string;
   lado: LadoBacklog;
 }
+
+/** Espeja GET /api/vercel/estado. */
+export interface EstadoVercel {
+  conectado: boolean;
+  team_id: string | null;
+}
+
+/** Espeja GET /api/render/estado y la respuesta de POST /api/render/conexion. */
+export interface EstadoRender {
+  conectado: boolean;
+  email?: string | null;
+  nombre?: string | null;
+  servicio_url?: string | null;
+  servicio_suspendido?: string | null;
+  advertencia?: string;
+}

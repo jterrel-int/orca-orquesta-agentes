@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from ..config import config
-from ..dominio.modelos import Item
+from ..dominio.modelos import CredencialRender, CredencialVercel, Item
 
 
 class Base(DeclarativeBase):
@@ -34,6 +34,35 @@ class ItemORM(Base):
 
     def a_dominio(self) -> Item:
         return Item(id=self.id, name=self.name, creado_en=self.creado_en)
+
+
+class CredencialVercelORM(Base):
+    """Una sola fila (id=1): este MVP conecta una cuenta de Vercel a la vez."""
+
+    __tablename__ = "credenciales_vercel"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    access_token: Mapped[str] = mapped_column(String(200), nullable=False)
+    team_id: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora)
+
+    def a_dominio(self) -> CredencialVercel:
+        return CredencialVercel(
+            access_token=self.access_token, team_id=self.team_id, creado_en=self.creado_en
+        )
+
+
+class CredencialRenderORM(Base):
+    """Misma idea que CredencialVercelORM: una sola fila, id=1."""
+
+    __tablename__ = "credenciales_render"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    api_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora)
+
+    def a_dominio(self) -> CredencialRender:
+        return CredencialRender(api_key=self.api_key, creado_en=self.creado_en)
 
 
 motor = create_async_engine(config.database_url, echo=False, future=True)
@@ -90,3 +119,56 @@ class RepositorioItemsSQLAlchemy:
         await self._sesion.delete(fila)
         await self._sesion.commit()
         return True
+
+
+class RepositorioCredencialVercelSQLAlchemy:
+    """Implementa dominio.puertos.RepositorioCredencialVercel."""
+
+    def __init__(self, sesion: AsyncSession) -> None:
+        self._sesion = sesion
+
+    async def guardar(self, credencial: CredencialVercel) -> None:
+        fila = await self._sesion.get(CredencialVercelORM, 1)
+        if fila is None:
+            fila = CredencialVercelORM(id=1)
+            self._sesion.add(fila)
+        fila.access_token = credencial.access_token
+        fila.team_id = credencial.team_id
+        await self._sesion.commit()
+
+    async def obtener(self) -> CredencialVercel | None:
+        fila = await self._sesion.get(CredencialVercelORM, 1)
+        return fila.a_dominio() if fila else None
+
+    async def eliminar(self) -> None:
+        fila = await self._sesion.get(CredencialVercelORM, 1)
+        if fila:
+            await self._sesion.delete(fila)
+            await self._sesion.commit()
+
+
+class RepositorioCredencialRenderSQLAlchemy:
+    """Sin puerto propio: solo lo usa api/render.py, no hay lógica de dominio
+    que necesite probarse contra un doble.
+    """
+
+    def __init__(self, sesion: AsyncSession) -> None:
+        self._sesion = sesion
+
+    async def guardar(self, credencial: CredencialRender) -> None:
+        fila = await self._sesion.get(CredencialRenderORM, 1)
+        if fila is None:
+            fila = CredencialRenderORM(id=1)
+            self._sesion.add(fila)
+        fila.api_key = credencial.api_key
+        await self._sesion.commit()
+
+    async def obtener(self) -> CredencialRender | None:
+        fila = await self._sesion.get(CredencialRenderORM, 1)
+        return fila.a_dominio() if fila else None
+
+    async def eliminar(self) -> None:
+        fila = await self._sesion.get(CredencialRenderORM, 1)
+        if fila:
+            await self._sesion.delete(fila)
+            await self._sesion.commit()

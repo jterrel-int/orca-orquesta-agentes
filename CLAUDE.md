@@ -80,6 +80,16 @@ tome solo porque le convendría un campo más.
 | El panel, componentes React, hooks                        | `frontend/app/`, `frontend/components/` |
 | Llamadas HTTP del frontend, tipos compartidos             | `frontend/lib/`                      |
 
+## Una trampa conocida en `api/`
+
+No pongas `from __future__ import annotations` en un módulo de `app/api/`
+que tenga una ruta `status_code=204` con retorno `-> None`. FastAPI infiere
+mal el response_model cuando la anotación de retorno llega como string en vez
+de `NoneType`, y explota al arrancar con "Status code 204 must not have a
+response body". `dominio/`, `adaptadores/` y `agents/` no tienen este
+problema — es específico de cómo FastAPI resuelve las anotaciones de las
+rutas. Ya pasó tres veces (`api/items.py`, `api/vercel.py`, `api/render.py`).
+
 ## Despliegue
 
 `DEPLOY_ENABLED=false` es el valor por defecto y **no cambia**. Un agente que

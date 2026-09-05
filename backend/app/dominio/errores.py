@@ -21,3 +21,11 @@ class DespliegueFallido(ErrorDominio):
 
 class CorridaEnCurso(ErrorDominio):
     """Ya hay una corrida de agentes en curso; no se puede lanzar otra."""
+
+
+class OAuthFallido(ErrorDominio):
+    """El intercambio OAuth con un proveedor externo no se completó."""
+
+
+class CredencialInvalida(ErrorDominio):
+    """La credencial provista no fue aceptada por el proveedor externo."""

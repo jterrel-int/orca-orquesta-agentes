@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ConexionRender from "@/components/ConexionRender";
+import ConexionVercel from "@/components/ConexionVercel";
 import { salud } from "@/lib/api";
 import type { Salud } from "@/lib/types";
 
@@ -85,6 +87,12 @@ export default function PaginaConfiguracion() {
             )}
           </>
         )}
+
+        <h2 style={{ fontSize: "0.95rem", margin: "1.75rem 0 0.75rem" }}>Conexiones</h2>
+        <div className="rejilla-conexiones">
+          <ConexionVercel />
+          <ConexionRender />
+        </div>
       </main>
     </>
   );

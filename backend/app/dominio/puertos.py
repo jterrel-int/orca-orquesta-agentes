@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Protocol, runtime_checkable
 
-from .modelos import EventoAgente, Item, TareaBacklog
+from .modelos import CredencialVercel, EventoAgente, Item, TareaBacklog
 
 EmisorLinea = Callable[[str], Awaitable[None]]
 
@@ -55,3 +55,15 @@ class RepositorioBacklog(Protocol):
 
     def listar(self) -> list[TareaBacklog]: ...
     def agregar(self, tarea: TareaBacklog) -> None: ...
+
+
+@runtime_checkable
+class RepositorioCredencialVercel(Protocol):
+    """Guarda el token OAuth de Vercel. `construir_desplegador()` lo prefiere
+    sobre VERCEL_TOKEN cuando hay uno guardado — de ahí que sea un puerto: hace
+    falta poder probar esa preferencia sin tocar SQLite de verdad.
+    """
+
+    async def guardar(self, credencial: CredencialVercel) -> None: ...
+    async def obtener(self) -> CredencialVercel | None: ...
+    async def eliminar(self) -> None: ...

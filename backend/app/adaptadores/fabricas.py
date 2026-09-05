@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 
 from ..config import config
-from ..dominio.puertos import Cerebro, Desplegador
+from ..dominio.puertos import Cerebro, Desplegador, RepositorioCredencialVercel
 from .cerebro_anthropic import CerebroAnthropic
 from .cerebro_guionado import CerebroGuionado
 from .despliegue_simulado import DespliegueSimulado
@@ -29,7 +29,23 @@ def construir_cerebro() -> Cerebro:
     return CerebroGuionado()
 
 
-def construir_desplegador() -> Desplegador:
-    if config.deploy_enabled:
-        return DespliegueVercel()
-    return DespliegueSimulado()
+async def construir_desplegador(
+    credenciales: RepositorioCredencialVercel | None = None,
+) -> Desplegador:
+    """Si hay un token OAuth guardado (ver api/vercel.py), tiene prioridad sobre
+    VERCEL_TOKEN. `credenciales` es inyectable para probar esa preferencia sin
+    tocar SQLite de verdad.
+    """
+    if not config.deploy_enabled:
+        return DespliegueSimulado()
+
+    if credenciales is None:
+        from .persistencia_sqlalchemy import FabricaSesion, RepositorioCredencialVercelSQLAlchemy
+
+        async with FabricaSesion() as sesion:
+            credencial = await RepositorioCredencialVercelSQLAlchemy(sesion).obtener()
+    else:
+        credencial = await credenciales.obtener()
+
+    token = credencial.access_token if credencial else config.vercel_token
+    return DespliegueVercel(token=token)

@@ -17,13 +17,14 @@ class DeployAgent(Agente):
     name = "deploy"
 
     def __init__(self, desplegador: Desplegador | None = None) -> None:
-        self._desplegador = desplegador or construir_desplegador()
+        self._desplegador_explicito = desplegador
 
     async def ejecutar(self, ctx: ContextoCorrida) -> list[str]:
         async def on_linea(texto: str) -> None:
             await self.log(ctx, texto)
 
-        url_produccion = await self._desplegador.ejecutar(on_linea)
+        desplegador = self._desplegador_explicito or await construir_desplegador()
+        url_produccion = await desplegador.ejecutar(on_linea)
 
         if not config.deploy_enabled:
             ctx.datos["deploy"] = "omitido"

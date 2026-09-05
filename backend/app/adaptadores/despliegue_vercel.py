@@ -16,10 +16,15 @@ from ..dominio.puertos import EmisorLinea
 
 
 class DespliegueVercel:
+    """Si no se pasa `token`, usa VERCEL_TOKEN; si tampoco hay, la sesión local del CLI."""
+
+    def __init__(self, token: str | None = None) -> None:
+        self._token = token if token is not None else config.vercel_token
+
     async def ejecutar(self, on_linea: EmisorLinea) -> str | None:
         cmd = ["vercel", "--prod", "--yes"]
-        if config.vercel_token:
-            cmd += ["--token", config.vercel_token]
+        if self._token:
+            cmd += ["--token", self._token]
 
         if shutil.which("vercel") is None:
             raise DespliegueFallido(
@@ -31,7 +36,7 @@ class DespliegueVercel:
         if not cwd.is_dir():
             raise DespliegueFallido(f"El directorio del frontend no existe: {cwd}")
 
-        visible = " ".join("--token ***" if c == config.vercel_token else c for c in cmd)
+        visible = " ".join("--token ***" if c == self._token else c for c in cmd)
         await on_linea(f"Ejecutando: {visible}")
 
         proceso = await asyncio.create_subprocess_exec(

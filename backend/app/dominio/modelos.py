@@ -65,3 +65,20 @@ class TareaBacklog:
     titulo: str
     cuerpo: str
     lado: Lado
+
+
+@dataclass
+class CredencialVercel:
+    """Resultado de un intercambio OAuth exitoso con Vercel."""
+
+    access_token: str
+    team_id: str | None = None
+    creado_en: datetime | None = None
+
+
+@dataclass
+class CredencialRender:
+    """API key de Render, ya verificada contra su API antes de guardarse."""
+
+    api_key: str
+    creado_en: datetime | None = None

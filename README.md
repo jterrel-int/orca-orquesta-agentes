@@ -229,6 +229,67 @@ panel, extrae la URL de producción y falla si el código de salida no es cero
 > El despliegue no corre dentro de Docker: el CLI de Vercel necesita tu sesión
 > local. Ejecútalo en el anfitrión.
 
+### Conectar con Vercel desde el panel (OAuth)
+
+Además de `VERCEL_TOKEN` a mano, `/configuracion` tiene un botón **Conectar
+con Vercel** que hace el login real por OAuth — mismo mecanismo que usa el MCP,
+pero para que el `DeployAgent` use el token en vez de vos. Cuando hay una
+conexión OAuth guardada, tiene prioridad sobre `VERCEL_TOKEN`.
+
+Antes de que el botón funcione, tenés que registrar tu propia integración en
+Vercel — es un trámite de una sola vez, en tu cuenta, y **nadie más puede
+hacerlo por vos**:
+
+1. Andá a [vercel.com/dashboard](https://vercel.com/dashboard) → elegí tu
+   cuenta/team → **Integrations** → **Integrations Console** → **Create**.
+2. Completá el formulario. Para uso privado (no vas a listarla en el
+   marketplace) alcanza con:
+   - **Name** / **URL Slug**: lo que quieras, p. ej. `orquesta-local`.
+   - **Developer**, **Contact email**, **Support email**: los tuyos.
+   - **Short description**, **Overview**, **Category**: cualquier texto,
+     no se valida para uso privado.
+   - **Logo** y **Feature media**: subí una imagen cualquiera (hasta un
+     screenshot del panel sirve) — son obligatorios en el formulario aunque
+     nadie más vaya a verlos.
+   - **EULA URL** / **Privacy Policy URL**: podés apuntar las dos al README
+     de este repo si no tenés páginas legales propias.
+   - **Redirect URL**: `http://localhost:8000/api/vercel/oauth/callback`
+     (Vercel acepta `localhost` explícitamente para desarrollo).
+   - **API Scopes**: como mínimo `deployment` y `project` en Read/Write.
+3. Guardá. Al pie de la página de tu integración vas a ver **Client ID** y
+   **Client Secret** (sección **Credentials**).
+4. En `backend/.env`:
+
+   ```
+   VERCEL_CLIENT_ID=...
+   VERCEL_CLIENT_SECRET=...
+   VERCEL_INTEGRATION_SLUG=orquesta-local   # el URL Slug del paso 2
+   ```
+
+5. Reiniciá el backend y probá el botón. Se abre una ventana emergente, te
+   loguea en Vercel, y se cierra sola cuando termina.
+
+Si en algún momento desplegás el backend a Render, agregá un **Redirect URL**
+adicional apuntando a `https://tu-backend.onrender.com/api/vercel/oauth/callback`
+y cambiá `VERCEL_OAUTH_REDIRECT_URI` en ese entorno.
+
+### Conectar con Render desde el panel
+
+Render no ofrece OAuth — su API solo se autentica con API keys personales. Por
+eso `/configuracion` tiene un formulario para pegarla en vez de un botón de
+login:
+
+1. Generá una API key en Render: **Account Settings** → **API Keys**.
+2. Pegala en el formulario de la sección **Render**. El backend la verifica
+   contra `GET /v1/users` antes de guardarla — si no sirve, no se guarda.
+3. Si existe un servicio con el nombre de `RENDER_SERVICE_NAME` (por defecto
+   `orquesta-backend`, el mismo de `backend/render.yaml`), el panel muestra su
+   URL y si está suspendido.
+
+Conectar Render acá es informativo — no dispara despliegues. Render despliega
+solo con cada push a la rama principal una vez que conectaste el repo desde
+su dashboard (ver la sección "Backend en Render" más arriba).
+
 ---
 
 ## MCP de Vercel
@@ -274,6 +335,11 @@ sesión.
 | GET | `/api/events` | Historial en memoria, para clientes sin WebSocket |
 | WS | `/ws` | Stream de eventos en vivo |
 | GET/POST/PUT/DELETE | `/api/items` | CRUD de Item |
+| GET/POST | `/api/backlog` | Lee y agrega tareas a docs/BACKLOG.md |
+| GET | `/api/vercel/oauth/iniciar` | Redirige a Vercel para autorizar |
+| GET | `/api/vercel/oauth/callback` | Canjea el `code` y guarda el token |
+| GET/DELETE | `/api/vercel/estado` / `/api/vercel/conexion` | Estado de la conexión OAuth |
+| POST/GET/DELETE | `/api/render/conexion`, `/api/render/estado` | API key de Render: guardar, consultar, borrar |
 
 Formato de los eventos:
 
@@ -316,6 +382,10 @@ Copia `.env.example` a `.env`. Ninguna es obligatoria.
 | `ANTHROPIC_API_KEY` | — | Necesaria si `BRAIN=anthropic` |
 | `DEPLOY_ENABLED` | `false` | `true` para desplegar de verdad |
 | `VERCEL_TOKEN` | — | Opcional; si falta usa tu sesión local |
+| `VERCEL_CLIENT_ID` / `VERCEL_CLIENT_SECRET` | — | De tu integración OAuth (ver "Conectar con Vercel") |
+| `VERCEL_INTEGRATION_SLUG` | — | El URL Slug que le pusiste a la integración |
+| `VERCEL_OAUTH_REDIRECT_URI` | `.../api/vercel/oauth/callback` | Debe coincidir con el Redirect URL registrado |
+| `RENDER_SERVICE_NAME` | `orquesta-backend` | Servicio que buscar al conectar Render |
 | `ORIGENES_PERMITIDOS` | `localhost:3000` | CORS |
 
 En el frontend, `NEXT_PUBLIC_API_URL` (por defecto `http://localhost:8000`).

@@ -5,12 +5,18 @@ from .cerebro_guionado import CerebroGuionado
 from .despliegue_simulado import DespliegueSimulado
 from .despliegue_vercel import DespliegueVercel
 from .fabricas import construir_cerebro, construir_desplegador
+from .oauth_vercel import intercambiar_code
 from .persistencia_sqlalchemy import (
+    CredencialRenderORM,
+    CredencialVercelORM,
     ItemORM,
+    RepositorioCredencialRenderSQLAlchemy,
+    RepositorioCredencialVercelSQLAlchemy,
     RepositorioItemsSQLAlchemy,
     crear_tablas,
     obtener_sesion,
 )
+from .render_api import buscar_servicio, obtener_usuario
 
 __all__ = [
     "RepositorioBacklogMarkdown",
@@ -22,8 +28,15 @@ __all__ = [
     "DespliegueVercel",
     "construir_cerebro",
     "construir_desplegador",
+    "intercambiar_code",
+    "CredencialRenderORM",
+    "CredencialVercelORM",
     "ItemORM",
+    "RepositorioCredencialRenderSQLAlchemy",
+    "RepositorioCredencialVercelSQLAlchemy",
     "RepositorioItemsSQLAlchemy",
     "crear_tablas",
     "obtener_sesion",
+    "buscar_servicio",
+    "obtener_usuario",
 ]
