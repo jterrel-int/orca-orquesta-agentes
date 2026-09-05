@@ -170,6 +170,39 @@ panel, extrae la URL de producción y falla si el código de salida no es cero.
 
 ---
 
+## MCP de Vercel
+
+El repo trae `.mcp.json` versionado, con el servidor MCP de Vercel a nivel de
+proyecto:
+
+```bash
+claude mcp add --scope project --transport http vercel https://mcp.vercel.com
+```
+
+Cualquiera que clone el repo lo tiene disponible sin configurar nada más.
+Cosas que conviene saber:
+
+- **Usa OAuth.** La primera vez que Claude Code lo usa, te pide autorizar en
+  el navegador. No hay token que copiar a ningún archivo.
+- **Los servidores de alcance de proyecto piden aprobación al iniciar
+  sesión.** Vas a ver algo como `vercel: ⏸ Pending approval` en
+  `claude mcp list` hasta que lo aceptes. Si el aviso no aparece solo,
+  habilitalo a mano agregando `"enabledMcpServers": ["vercel"]` a
+  `.claude/settings.local.json` (ese archivo es personal — está en
+  `.gitignore`, no lo subas).
+- **Alternativa:** `vercel mcp` configura Claude Code directamente desde el
+  CLI de Vercel, y con `--project` apunta a la URL específica del proyecto ya
+  vinculado en vez del endpoint compartido.
+- **El MCP no despliega.** Sirve para buscar en la documentación de Vercel,
+  listar proyectos y despliegues, y leer logs de build. El despliegue real lo
+  hace el CLI (`vercel --prod`, ya sea a mano o vía `DeployAgent`). No hay
+  código en este repo que espere desplegar a través del MCP.
+
+Verificá que quedó andando con `claude mcp list` o `/mcp` dentro de una
+sesión.
+
+---
+
 ## API
 
 | Método | Ruta | Qué hace |

@@ -20,4 +20,7 @@ out/
 # Vercel
 .vercel
 
+# Claude Code: aprobación personal de servidores MCP de alcance de proyecto
+.claude/settings.local.json
+
 .DS_Store
