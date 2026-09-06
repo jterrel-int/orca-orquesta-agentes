@@ -32,8 +32,8 @@ export default function LogStream({ eventos }: { eventos: EventoAgente[] }) {
     return (
       <div className="consola">
         <p className="consola-vacia">
-          Sin eventos. Presiona <strong>Ejecutar agentes</strong> y los logs
-          aparecerán aquí en vivo.
+          Sin eventos. Ejecutá un caso de prueba y los logs aparecerán aquí en
+          vivo.
         </p>
       </div>
     );

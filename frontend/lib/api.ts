@@ -1,4 +1,5 @@
 import type {
+  CasoDeUso,
   EstadoRender,
   EstadoVercel,
   Item,
@@ -26,10 +27,16 @@ async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
 
 // --- corridas de agentes ---
 
-export const lanzarCorrida = () =>
-  pedir<{ status: string; detalle: string }>("/api/run", { method: "POST" });
+/** `casoDeUso` ausente/null lanza el comportamiento histórico (CRUD de Items). */
+export const lanzarCorrida = (casoDeUso?: string | null) =>
+  pedir<{ status: string; detalle: string }>("/api/run", {
+    method: "POST",
+    body: JSON.stringify({ caso_de_uso: casoDeUso ?? null }),
+  });
 
 export const estadoCorrida = () => pedir<ResumenCorrida | null>("/api/run/status");
+
+export const casosDeUso = () => pedir<CasoDeUso[]>("/api/casos-de-uso");
 
 export const salud = () => pedir<Salud>("/api/health");
 
