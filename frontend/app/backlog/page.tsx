@@ -3,12 +3,22 @@
 import { useEffect, useState } from "react";
 import FormularioTarea from "@/components/FormularioTarea";
 import { listarBacklog } from "@/lib/api";
-import type { TareaBacklog } from "@/lib/types";
+import { partirCuerpoTarea } from "@/lib/backlog";
+import type { LadoBacklog, TareaBacklog } from "@/lib/types";
+
+type Pestana = "todas" | LadoBacklog;
+
+const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
+  { valor: "todas", etiqueta: "Todas" },
+  { valor: "BE", etiqueta: "Backend" },
+  { valor: "FE", etiqueta: "Frontend" },
+];
 
 export default function PaginaBacklog() {
   const [tareas, setTareas] = useState<TareaBacklog[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Pestana>("todas");
 
   useEffect(() => {
     listarBacklog()
@@ -16,6 +26,8 @@ export default function PaginaBacklog() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "No se pudo cargar"))
       .finally(() => setCargando(false));
   }, []);
+
+  const tareasFiltradas = tareas.filter((t) => tab === "todas" || t.lado === tab);
 
   return (
     <>
@@ -29,23 +41,55 @@ export default function PaginaBacklog() {
 
         {cargando && <p className="apagado">Cargando…</p>}
         {error && <p className="error">{error}</p>}
-        {!cargando && !error && tareas.length === 0 && (
-          <p className="apagado">No hay tareas en el backlog todavía.</p>
-        )}
 
-        <div className="rejilla-tareas">
-          {tareas.map((t) => (
-            <article key={t.id} className="tarjeta-tarea">
-              <div className="cabecera-tarea">
-                <span className={`pastilla-lado ${t.lado === "BE" ? "backend" : "frontend"}`}>
-                  {t.id}
-                </span>
-                <h3>{t.titulo}</h3>
-              </div>
-              <div className="cuerpo-tarea">{t.cuerpo}</div>
-            </article>
-          ))}
-        </div>
+        {!cargando && !error && (
+          <>
+            <div className="tabs-lado" role="tablist" aria-label="Filtrar por frente">
+              {PESTANAS.map((p) => (
+                <button
+                  key={p.valor}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === p.valor}
+                  className={tab === p.valor ? "activo" : ""}
+                  onClick={() => setTab(p.valor)}
+                >
+                  {p.etiqueta}
+                </button>
+              ))}
+            </div>
+
+            {tareas.length === 0 && <p className="apagado">No hay tareas en el backlog todavía.</p>}
+            {tareas.length > 0 && tareasFiltradas.length === 0 && (
+              <p className="apagado">No hay tareas para este frente.</p>
+            )}
+
+            <div className="rejilla-tareas">
+              {tareasFiltradas.map((t) => (
+                <article
+                  key={t.id}
+                  className="tarjeta-tarea"
+                  style={{ ["--matiz" as string]: t.lado === "BE" ? "var(--backend)" : "var(--frontend)" }}
+                >
+                  <div className="cabecera-tarea">
+                    <span className={`pastilla-lado ${t.lado === "BE" ? "backend" : "frontend"}`}>
+                      {t.id}
+                    </span>
+                    <h3>{t.titulo}</h3>
+                  </div>
+                  <div className="cuerpo-tarea">
+                    {partirCuerpoTarea(t.cuerpo).map((seccion, i) => (
+                      <div className="subseccion-tarea" key={`${t.id}-${i}`}>
+                        {seccion.titulo && <span className="etiqueta-subseccion">{seccion.titulo}</span>}
+                        <p className="texto-subseccion">{seccion.texto}</p>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
       </main>
     </>
   );
