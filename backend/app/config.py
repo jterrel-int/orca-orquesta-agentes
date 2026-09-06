@@ -37,6 +37,20 @@ class Config(BaseSettings):
     # --- rutas de generación ---
     dir_generado_backend: str = str(RAIZ_BACKEND / "app" / "generated")
     dir_generado_frontend: str = str(RAIZ_PROYECTO / "frontend" / "app" / "items")
+    # Raíz para los casos de uso nuevos (calculadora, leads, encuesta): cada uno
+    # escribe su componente bajo dir_generado_frontend_casos/<caso>/. "items"
+    # sigue usando dir_generado_frontend de arriba, sin cambios.
+    dir_generado_frontend_casos: str = str(RAIZ_PROYECTO / "frontend" / "app" / "casos")
+
+    # --- ritmo de la demo ---
+    # Duración de cada sub-paso adicional que loguean BackendAgent/FrontendAgent
+    # para los casos de uso nuevos (calculadora, leads, encuesta) — "items" no
+    # los usa y no cambia su timing. El default de acá es el de producción:
+    # apunta a que una corrida completa de un caso nuevo se sienta como una
+    # demo real (~4-6 minutos). Los tests que ejercitan estos agentes
+    # directamente bajan este valor con monkeypatch antes de correr, así la
+    # suite no se vuelve lenta.
+    duracion_paso_demo_s: float = 40.0
 
     # --- backlog ---
     ruta_backlog: str = str(RAIZ_PROYECTO / "docs" / "BACKLOG.md")

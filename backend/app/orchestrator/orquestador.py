@@ -62,8 +62,12 @@ class Orquestador:
 
     # --- ejecución ---
 
-    async def ejecutar(self) -> ResumenCorrida:
-        """Corre el pipeline completo. Una sola corrida a la vez."""
+    async def ejecutar(self, caso_de_uso: str | None = None) -> ResumenCorrida:
+        """Corre el pipeline completo. Una sola corrida a la vez.
+
+        `caso_de_uso` selecciona qué genera BackendAgent/FrontendAgent (ver
+        app.agents.casos_de_uso); None es el caso "items" histórico.
+        """
         async with self._lock:
             if self._corriendo:
                 raise CorridaEnCurso("Ya hay una corrida en curso")
@@ -78,9 +82,11 @@ class Orquestador:
             status="running",
             agentes=[EstadoAgente(agent=n) for n in nombres],
             iniciado_en=_ahora_iso(),
+            caso_de_uso=caso_de_uso,
         )
 
         ctx = ContextoCorrida(run_id=run_id, emitir=self._bus.publicar)
+        ctx.datos["caso_de_uso"] = caso_de_uso
         await self._bus.publicar(
             EventoAgente(
                 agent="orchestrator",

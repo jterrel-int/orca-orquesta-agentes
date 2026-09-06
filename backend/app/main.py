@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .adaptadores.persistencia_sqlalchemy import crear_tablas
+from .agents.casos_de_uso import archivos_backend_generados
 from .api import backlog_router, corridas_router, items_router, render_router, vercel_router
 from .api.corridas import registrar_post_corrida
 from .config import config
@@ -26,36 +27,54 @@ log = logging.getLogger("orquesta")
 
 
 def montar_router_generado(app: FastAPI) -> bool:
-    """Monta app/generated/item_routes.py si existe.
+    """Monta los routers generados en app/generated/ que existan en disco.
 
-    Se llama al arrancar y otra vez al terminar una corrida, para que los
-    endpoints que generó el BackendAgent aparezcan sin reiniciar el proceso.
+    Cada caso de uso (ver agents/casos_de_uso.py) tiene su propio archivo y su
+    propio prefijo de rutas, así que pueden convivir montados a la vez sin
+    colisionar. Se llama al arrancar y otra vez al terminar cada corrida, para
+    que los endpoints que acaba de generar el BackendAgent aparezcan sin
+    reiniciar el proceso.
     """
-    archivo = Path(config.dir_generado_backend) / "item_routes.py"
-    if not archivo.is_file():
-        return False
-    try:
-        spec = importlib.util.spec_from_file_location("app.generated.item_routes", archivo)
-        if spec is None or spec.loader is None:
-            return False
-        modulo = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(modulo)
-        app.include_router(modulo.router)
+    destino = Path(config.dir_generado_backend)
+    montado_alguno = False
+    for nombre_archivo in archivos_backend_generados():
+        archivo = destino / nombre_archivo
+        if not archivo.is_file():
+            continue
+        try:
+            modulo_id = Path(nombre_archivo).stem
+            spec = importlib.util.spec_from_file_location(f"app.generated.{modulo_id}", archivo)
+            if spec is None or spec.loader is None:
+                continue
+            modulo = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(modulo)
+            app.include_router(modulo.router)
+            montado_alguno = True
+            log.info("Router generado montado desde %s", archivo)
+        except Exception:  # noqa: BLE001
+            log.exception("No se pudo montar el router generado (%s)", archivo)
+
+    if montado_alguno:
         # FastAPI cachea el esquema OpenAPI; sin esto /docs no muestra lo nuevo.
         app.openapi_schema = None
-        log.info("Router generado montado desde %s", archivo)
-        return True
-    except Exception:  # noqa: BLE001
-        log.exception("No se pudo montar el router generado")
-        return False
+    return montado_alguno
+
+
+async def _post_corrida(app: FastAPI) -> None:
+    """Gancho posterior a cada corrida: monta lo nuevo y crea sus tablas."""
+    if montar_router_generado(app):
+        await crear_tablas()
 
 
 @asynccontextmanager
 async def ciclo_vida(app: FastAPI) -> AsyncIterator[None]:
+    # Montar primero: los routers de calculadora/leads/encuesta definen sus
+    # propias tablas ORM sobre la Base compartida al importarse, y crear_tablas
+    # necesita verlas ya registradas para crearlas.
+    montar_router_generado(app)
     await crear_tablas()
     await gestor.iniciar_retransmision()
-    montar_router_generado(app)
-    registrar_post_corrida(lambda: montar_router_generado(app))
+    registrar_post_corrida(lambda: _post_corrida(app))
     log.info("Orquesta lista · brain=%s · deploy=%s", config.brain, config.deploy_enabled)
     yield
     await gestor.detener_retransmision()
@@ -99,6 +118,8 @@ async def salud() -> dict[str, Any]:
 
 @app.post("/api/generated/reload", tags=["salud"])
 async def recargar_generado() -> dict[str, Any]:
-    """Vuelve a montar el router generado sin reiniciar el proceso."""
+    """Vuelve a montar los routers generados sin reiniciar el proceso."""
     montado = montar_router_generado(app)
+    if montado:
+        await crear_tablas()
     return {"montado": montado}
