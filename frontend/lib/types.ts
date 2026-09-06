@@ -23,6 +23,16 @@ export interface ResumenCorrida {
   agentes: ResumenAgente[];
   iniciado_en: string;
   terminado_en: string | null;
+  /** Qué caso de uso lanzó esta corrida; null/ausente es el CRUD de Items. */
+  caso_de_uso?: string | null;
+}
+
+/** Espeja GET /api/casos-de-uso. */
+export interface CasoDeUso {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  icono: string;
 }
 
 export interface Item {
