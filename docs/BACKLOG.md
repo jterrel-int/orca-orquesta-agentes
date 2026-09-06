@@ -130,3 +130,256 @@ usando el endpoint de BE-02.
 menos dos corridas ya hechas, `/historial` las lista con su estado y horario.
 
 **Depende de:** BE-02 (necesita `GET /api/run/historial`).
+
+---
+
+## BE-05 — Parametrizar el pipeline por caso de uso
+
+Hoy `Orquestador.ejecutar()` no recibe parámetros y `BackendAgent`/
+`FrontendAgent` tienen hardcodeados el `INSTRUCCION` y el `respaldo` del CRUD
+de "Item". Se necesita poder lanzar 3 corridas de demo distintas
+(calculadora, leads de zapatillas, encuesta) además de la de Items, sin
+duplicar el pipeline.
+
+Crear `backend/app/agents/casos_de_uso.py` con: (1) un `CasoDeUso` (id,
+nombre, descripcion, icono) por cada caso más "items", para exponer metadata
+al frontend; (2) un registro interno por caso con instrucción para el
+cerebro, contexto, código de respaldo, prefijo de rutas API, nombre del
+archivo generado en backend y nombre/ruta del componente generado en
+frontend. `None`/`"items"` debe mapear exactamente a las constantes actuales
+(`INSTRUCCION`, `ROUTER_ITEMS`, `LISTA_ITEMS_TSX`) — no reescribirlas, solo
+moverlas al registro.
+
+`Orquestador.ejecutar(caso_de_uso: str | None = None)` mete el valor en
+`ContextoCorrida.datos["caso_de_uso"]` y en `self._resumen.caso_de_uso`
+(campo nuevo en `ResumenCorrida`, que no es el contrato congelado del
+WebSocket — `EventoAgente` no se toca). `BackendAgent`/`FrontendAgent` leen
+`ctx.datos.get("caso_de_uso")` y usan el registro en vez de las constantes
+fijas. `POST /api/run` acepta un body opcional `{"caso_de_uso": "..." |
+null}`; ausente o `null` es el comportamiento de hoy. Nuevo endpoint `GET
+/api/casos-de-uso` que devuelve la lista de `CasoDeUso` para que el frontend
+no hardcodee esa metadata.
+
+`main.py:montar_router_generado` deja de estar cableado a un único
+`item_routes.py`: itera los (archivo, nombre de módulo) de todos los casos
+con código generado y monta los que existan — cada caso tiene su propio
+prefijo de API, así que no colisionan al convivir montados.
+
+**Archivos:** `backend/app/agents/casos_de_uso.py` (nuevo),
+`backend/app/agents/backend_agent.py`, `backend/app/agents/frontend_agent.py`,
+`backend/app/orchestrator/orquestador.py`, `backend/app/dominio/modelos.py`
+(`ResumenCorrida.caso_de_uso`), `backend/app/api/corridas.py` (body de
+`POST /api/run`, nuevo `GET /api/casos-de-uso`), `backend/app/main.py`
+(`montar_router_generado` iterando varios casos), `backend/app/config.py` si
+hace falta generalizar `dir_generado_backend`.
+
+**Verificación:** `ruff check . && ruff format --check .`, `mypy
+app/dominio`, `pytest -q` (`test_arquitectura.py` en verde: nada de esto
+importa `fastapi`/`sqlalchemy` desde `dominio/`); ampliar
+`test_agentes.py`/`test_orquestador.py` para cubrir que `caso_de_uso=None`
+sigue generando el CRUD de Item byte a byte igual que antes, y que pasar
+`"calculadora"` selecciona la instrucción/respaldo correctos.
+
+**Depende de:** nada. BE-06, BE-07, BE-08 y todo FE-06..FE-09 dependen de
+esta.
+
+---
+
+## BE-06 — Caso de uso "Calculadora con login e historial"
+
+Router FastAPI autocontenido en `/api/calculadora`, montado dinámicamente
+igual que el de Items. Reutiliza `motor`/`FabricaSesion` de
+`persistencia_sqlalchemy.py` (tablas propias: usuarios, sesiones,
+operaciones). Endpoints: `POST /registro` (usuario, clave — hashea con
+`hashlib.pbkdf2_hmac` + `secrets.token_hex` para el salt, 409 si el usuario
+ya existe), `POST /login` (valida y devuelve un token de sesión guardado en
+tabla propia), `POST /operar` (autenticado con `Authorization: Bearer
+<token>`; +,-,*,/ con división por cero controlada; persiste cada operación
+con el id del usuario), `GET /historial` (autenticado, lista las operaciones
+del usuario logueado, más recientes primero). Este es el código de
+`respaldo` para `caso_de_uso="calculadora"` que registra BE-05.
+
+**Archivos:** `backend/app/agents/plantillas_calculadora.py` (o sección
+dedicada en `plantillas.py`), enganchado desde el registro de BE-05.
+
+**Verificación:** `pytest -q` sobre un `test_caso_calculadora.py` nuevo
+(SQLite en memoria): registro → login → operar → historial devuelve la
+operación; login con clave incorrecta da 401; `/operar` sin token da 401;
+`ruff`/`mypy` en verde.
+
+**Depende de:** BE-05.
+
+---
+
+## BE-07 — Caso de uso "Leads de zapatillas"
+
+Router FastAPI autocontenido en `/api/leads`. Tabla propia (nombre, email,
+teléfono, talla, comentario, creado_en). `POST /` guarda un lead (validación
+básica: nombre y email no vacíos, email con formato mínimo); `GET /` lista
+los leads capturados, más recientes primero. Sin autenticación — es una
+demo pública, se documenta como tal en el código. Este es el `respaldo` para
+`caso_de_uso="leads_zapatillas"`.
+
+**Archivos:** `backend/app/agents/plantillas_leads.py` (o sección dedicada
+en `plantillas.py`), enganchado desde el registro de BE-05.
+
+**Verificación:** `pytest -q` sobre `test_caso_leads.py` nuevo: `POST /`
+seguido de `GET /` devuelve el lead creado; `POST /` con email vacío da 422;
+`ruff`/`mypy` en verde.
+
+**Depende de:** BE-05.
+
+---
+
+## BE-08 — Caso de uso "Encuesta de satisfacción"
+
+Router FastAPI autocontenido en `/api/encuesta`. Tabla propia (puntaje 1-5,
+comentario opcional, creado_en). `POST /` guarda una respuesta (rechaza
+puntaje fuera de 1-5); `GET /resultados` devuelve total de respuestas,
+promedio y conteo por puntaje (1..5). Este es el `respaldo` para
+`caso_de_uso="encuesta"`.
+
+**Archivos:** `backend/app/agents/plantillas_encuesta.py` (o sección
+dedicada en `plantillas.py`), enganchado desde el registro de BE-05.
+
+**Verificación:** `pytest -q` sobre `test_caso_encuesta.py` nuevo: varias
+`POST /` seguidas de `GET /resultados` devuelven el promedio y el conteo
+correctos; puntaje 0 o 6 da 422; `ruff`/`mypy` en verde.
+
+**Depende de:** BE-05.
+
+---
+
+## FE-04 — Rediseño de paleta, logo y Sidebar
+
+Reemplazar el tema oscuro actual por uno claro inspirado en el logo de
+inteligenze (azul petróleo `#0B3A4D` sobre blanco). Actualizar los tokens de
+color en `frontend/app/globals.css` (`--marca`, `--fondo`, `--panel`,
+`--borde`, `--texto`, `--backend`/`--frontend`/`--deploy`, etc. — ver el
+plan de diseño), subir `--radio` para cards más redondeadas, y agregar una
+fuente serif solo para títulos/el lockup del logo. Ninguna clase utilitaria
+existente cambia de nombre ni de estructura, solo sus valores.
+
+Agregar el logo (`frontend/public/logo-inteligenze.webp`) arriba del nav en
+`Sidebar.tsx`.
+
+**Archivos:** `frontend/app/globals.css`, `frontend/components/Sidebar.tsx`,
+`frontend/public/logo-inteligenze.webp` (nuevo asset).
+
+**Verificación:** `npx tsc --noEmit`, `npm run build`; manualmente, levantar
+el panel y confirmar que todas las páginas (Panel, Items, Backlog,
+Configuración) se ven legibles con el nuevo tema — sin texto sobre fondo del
+mismo color, sin contraste roto en los estados `error`/`ok`/`advertencia`.
+
+**Depende de:** nada.
+
+---
+
+## FE-05 — Backlog con tabs por frente y cards rediseñadas
+
+En `frontend/app/backlog/page.tsx`, agregar tabs ("Todas" / "Backend" /
+"Frontend") que filtran `tareas` client-side por `t.lado` — el dato ya viene
+de `GET /api/backlog`, no hace falta tocar el backend. Restylear
+`tarjeta-tarea`: acento de color por lado, mejor jerarquía tipográfica del
+título, y separar visualmente dentro de `cuerpo-tarea` las subsecciones que
+ya trae el markdown (Archivos/Verificación/Depende de) partiendo el string
+por esos encabezados en el componente.
+
+**Archivos:** `frontend/app/backlog/page.tsx`, `frontend/app/globals.css`
+(estilos de `tarjeta-tarea` y de las tabs nuevas).
+
+**Verificación:** `npx tsc --noEmit`, `npm run build`; manualmente, con
+tareas BE y FE existentes, confirmar que cada tab filtra correctamente y que
+las subsecciones de cada card se leen separadas.
+
+**Depende de:** FE-04 (usa los tokens de color nuevos).
+
+---
+
+## FE-06 — Panel: sección "Casos de prueba" + rediseño de tarjetas
+
+Restylear `AgentCard` (ícono simple por rol, acento de color, sombra suave)
+y `LogStream` (de consola oscura a feed de actividad sobre fondo claro,
+borde de color por agente). Agregar una sección nueva "Casos de prueba" en
+`frontend/app/page.tsx` con 3 cards (una por caso de BE-06/07/08), cuya
+metadata viene de un nuevo `GET /api/casos-de-uso` (función `casosDeUso()`
+en `frontend/lib/api.ts`) — no hardcodear nombres/descripciones en el
+componente. Cada card tiene un botón "Ejecutar" que llama a
+`lanzarCorrida(casoDeUsoId)` (ampliar `lanzarCorrida` en `lib/api.ts` para
+mandar el body `{caso_de_uso}`) y, cuando el `ResumenCorrida.caso_de_uso`
+coincide y `status === "done"`, un link "Ver resultado" a su página
+(`ruta_frontend` de la metadata). El botón "Ejecutar agentes" genérico
+(Items) se mantiene, más chico, como cuarta opción.
+
+**Archivos:** `frontend/app/page.tsx`, `frontend/components/AgentCard.tsx`,
+`frontend/components/LogStream.tsx`, `frontend/components/RunButton.tsx`
+(o un componente nuevo `CasoDePruebaCard.tsx`), `frontend/lib/api.ts`,
+`frontend/lib/types.ts` (`CasoDeUso`, `ResumenCorrida.caso_de_uso`),
+`frontend/app/globals.css`.
+
+**Verificación:** `npx tsc --noEmit`, `npm run build`; manualmente, con el
+backend de BE-05 corriendo, lanzar cada uno de los 3 casos desde su card y
+confirmar que las `AgentCard` y el `LogStream` muestran el progreso real, y
+que "Ver resultado" aparece al terminar.
+
+**Depende de:** FE-04, BE-05.
+
+---
+
+## FE-07 — Página del caso "Calculadora"
+
+Shell de página `frontend/app/casos/calculadora/page.tsx` (mismo patrón que
+`app/items/page.tsx`) que importa un componente `Calculadora.tsx` cuyo
+*contenido* es lo que sobreescribe el `FrontendAgent` en cada corrida de
+este caso. El archivo inicial ya trae el código de respaldo (igual que
+`ListaItems.tsx` hoy) para que la página funcione antes de correr el agente:
+login/registro → teclado de calculadora → tabla de historial → cerrar
+sesión. Token de sesión en `localStorage`.
+
+**Archivos:** `frontend/app/casos/calculadora/page.tsx` (nuevo),
+`frontend/app/casos/calculadora/Calculadora.tsx` (nuevo, contenido inicial =
+respaldo), `frontend/lib/api.ts` (helpers para `/api/calculadora/*`).
+
+**Verificación:** `npx tsc --noEmit`, `npm run build`; manualmente, registrar
+un usuario, loguearse, hacer una operación y ver que aparece en el
+historial; cerrar sesión y confirmar que pide login de nuevo.
+
+**Depende de:** BE-06.
+
+---
+
+## FE-08 — Página del caso "Leads de zapatillas"
+
+Shell de página `frontend/app/casos/leads/page.tsx` que importa
+`FormularioLeads.tsx` (contenido inicial = respaldo): formulario público
+(nombre, email, teléfono, talla, comentario) con validación básica y
+confirmación visual al enviar, más una tabla debajo con los leads ya
+capturados (`GET /api/leads`).
+
+**Archivos:** `frontend/app/casos/leads/page.tsx` (nuevo),
+`frontend/app/casos/leads/FormularioLeads.tsx` (nuevo), `frontend/lib/api.ts`
+(helpers para `/api/leads`).
+
+**Verificación:** `npx tsc --noEmit`, `npm run build`; manualmente, enviar un
+lead y confirmar que aparece en la tabla sin recargar la página.
+
+**Depende de:** BE-07.
+
+---
+
+## FE-09 — Página del caso "Encuesta"
+
+Shell de página `frontend/app/casos/encuesta/page.tsx` que importa
+`Encuesta.tsx` (contenido inicial = respaldo): selector de puntaje 1-5 +
+comentario opcional, y una sección de resultados agregados (barras hechas
+con `div`+CSS, sin librería de gráficos) usando `GET /api/encuesta/resultados`.
+
+**Archivos:** `frontend/app/casos/encuesta/page.tsx` (nuevo),
+`frontend/app/casos/encuesta/Encuesta.tsx` (nuevo), `frontend/lib/api.ts`
+(helpers para `/api/encuesta`).
+
+**Verificación:** `npx tsc --noEmit`, `npm run build`; manualmente, enviar
+varias respuestas y confirmar que el promedio y el conteo por puntaje se
+actualizan.
+
+**Depende de:** BE-08.
