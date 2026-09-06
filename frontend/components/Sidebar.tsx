@@ -16,6 +16,7 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="marca">
+        <img src="/logo-inteligenze.webp" alt="inteligenze" className="marca-logo" />
         <strong>Orquesta</strong>
         <span className="sub">panel de agentes</span>
       </div>

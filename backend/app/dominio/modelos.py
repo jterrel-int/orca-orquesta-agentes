@@ -54,6 +54,10 @@ class ResumenCorrida:
     agentes: list[EstadoAgente]
     iniciado_en: str
     terminado_en: str | None = None
+    # Qué caso de uso pidió esta corrida (ver app.agents.casos_de_uso). None es
+    # el caso "items" histórico. No es el contrato congelado del WebSocket
+    # (EventoAgente) — ese no se toca.
+    caso_de_uso: str | None = None
 
 
 Lado = Literal["BE", "FE"]

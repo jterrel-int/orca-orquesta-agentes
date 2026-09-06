@@ -1,31 +1,36 @@
 /* Orquesta — sistema visual.
-   Sala de control: fondo de pizarra profunda, no negro puro. Cada agente tiene
+   Tema claro inspirado en el logo de inteligenze: azul petróleo sobre blanco,
+   cálido y amigable (bordes redondeados, sombras suaves). Cada agente tiene
    su matiz propio para que el ojo siga una columna sin leer la etiqueta.
    El verde y el rojo son estado, nunca decoración. */
 
 :root {
-  --fondo:   #12171D;
-  --panel:   #1A2028;
-  --realce:  #232B35;
-  --borde:   #2C3540;
+  --marca:       #0B3A4D;
+  --marca-clara: #1D6E8C;
 
-  --texto:   #E4E7EA;
-  --apagado: #8A949F;
+  --fondo:   #F6F8F9;
+  --panel:   #FFFFFF;
+  --realce:  #EEF3F5;
+  --borde:   #DCE4E8;
 
-  --backend:      #6C9CF5;
-  --frontend:     #C88BE8;
-  --deploy:       #F2A65A;
-  --orchestrator: #8A949F;
+  --texto:   #16232B;
+  --apagado: #64757F;
 
-  --ok:      #4FB286;
-  --error:   #E0603E;
-  --advertencia: #D9A441;
+  --backend:      #0B3A4D;
+  --frontend:     #1D6E8C;
+  --deploy:       #C9832E;
+  --orchestrator: #64757F;
 
-  --radio: 4px;
+  --ok:      #2F9E6E;
+  --error:   #D64545;
+  --advertencia: #D6972F;
+
+  --radio: 10px;
 
   /* Si las webfonts no cargan (sin red), cae al stack del sistema sin romper nada. */
   --fuente-ui: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --fuente-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  --fuente-titulo: "Source Serif 4", Georgia, serif;
 }
 
 * { box-sizing: border-box; }
@@ -46,7 +51,7 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
-a { color: var(--backend); }
+a { color: var(--marca-clara); }
 
 /* --- estructura general: sidebar fija + contenido ancho --- */
 
@@ -63,8 +68,15 @@ a { color: var(--backend); }
   gap: 1.5rem;
 }
 
-.marca { display: flex; flex-direction: column; gap: 0.15rem; }
-.marca strong { font-size: 1.05rem; letter-spacing: 0.02em; }
+.marca { display: flex; flex-direction: column; gap: 0.15rem; margin-bottom: 0.25rem; }
+.marca-logo { width: 150px; height: auto; margin-bottom: 0.9rem; }
+.marca strong {
+  font-family: var(--fuente-titulo);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--marca);
+  letter-spacing: 0.01em;
+}
 .marca .sub { color: var(--apagado); font-size: 0.82rem; }
 
 .nav-lateral { display: flex; flex-direction: column; gap: 0.15rem; }
@@ -92,10 +104,12 @@ a { color: var(--backend); }
 }
 
 .cabecera h1 {
-  font-size: 1.05rem;
+  font-family: var(--fuente-titulo);
+  font-size: 1.4rem;
   font-weight: 600;
   margin: 0;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  color: var(--marca);
 }
 
 .cabecera .sub { color: var(--apagado); font-size: 0.88rem; }
@@ -122,6 +136,7 @@ a { color: var(--backend); }
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  box-shadow: 0 1px 3px rgba(11, 58, 77, 0.08);
 }
 
 .tarjeta .nombre {
@@ -205,9 +220,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 button:focus-visible { outline: 2px solid var(--backend); outline-offset: 2px; }
 
 button.primario {
-  background: var(--backend);
-  border-color: var(--backend);
-  color: #0E141A;
+  background: var(--marca);
+  border-color: var(--marca);
+  color: #FFFFFF;
   font-weight: 600;
 }
 
@@ -253,7 +268,7 @@ textarea { resize: vertical; font-family: inherit; }
 .fila-pastillas { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
 .aviso-config {
-  background: rgba(217, 164, 65, 0.1);
+  background: rgba(214, 151, 47, 0.1);
   border: 1px solid var(--advertencia);
   border-radius: var(--radio);
   padding: 0.6rem 0.9rem;
@@ -296,21 +311,49 @@ textarea { resize: vertical; font-family: inherit; }
   max-width: 46rem;
 }
 
+.tabs-lado {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.tabs-lado button {
+  background: var(--panel);
+}
+
+.tabs-lado button.activo {
+  background: var(--marca);
+  border-color: var(--marca);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
 .rejilla-tareas {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .tarjeta-tarea {
   background: var(--panel);
   border: 1px solid var(--borde);
+  border-left: 4px solid var(--matiz, var(--borde));
   border-radius: var(--radio);
-  padding: 0.9rem 1rem;
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 2px 8px rgba(11, 58, 77, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
-.cabecera-tarea { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.5rem; }
-.cabecera-tarea h3 { margin: 0; font-size: 0.95rem; }
+.cabecera-tarea { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.15rem; }
+.cabecera-tarea h3 {
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--texto);
+}
 
 .pastilla-lado {
   font-family: var(--fuente-mono);
@@ -323,11 +366,32 @@ textarea { resize: vertical; font-family: inherit; }
 .pastilla-lado.frontend { color: var(--frontend); border: 1px solid var(--frontend); }
 
 .cuerpo-tarea {
-  white-space: pre-wrap;
-  font-size: 0.85rem;
-  color: var(--apagado);
-  max-height: 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  color: var(--texto);
+  max-height: 18rem;
   overflow-y: auto;
+}
+
+.subseccion-tarea { display: flex; flex-direction: column; gap: 0.2rem; }
+
+.etiqueta-subseccion {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--apagado);
+}
+
+.texto-subseccion {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--texto);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 @media (prefers-reduced-motion: reduce) {

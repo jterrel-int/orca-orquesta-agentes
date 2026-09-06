@@ -65,3 +65,32 @@ async def test_fallo_en_etapa_1_omite_etapa_2() -> None:
 
     estado_b = next(e for e in resumen.agentes if e.agent == "dos")
     assert estado_b.status == "pending"
+
+
+# --- BE-05: caso_de_uso viaja al contexto y al resumen ---
+
+
+async def test_ejecutar_propaga_caso_de_uso_al_contexto_y_al_resumen() -> None:
+    capturado: list[str | None] = []
+
+    class AgenteQueLeeElCaso(Agente):
+        name = "backend"
+
+        async def ejecutar(self, ctx: ContextoCorrida) -> list[str]:
+            capturado.append(ctx.datos.get("caso_de_uso"))
+            return []
+
+    orq = OrquestadorDePrueba([[AgenteQueLeeElCaso()]], BusFalso())
+
+    resumen = await orq.ejecutar(caso_de_uso="calculadora")
+
+    assert capturado == ["calculadora"]
+    assert resumen.caso_de_uso == "calculadora"
+
+
+async def test_ejecutar_sin_caso_de_uso_deja_el_resumen_en_none() -> None:
+    orq = OrquestadorDePrueba([[AgenteFalso("uno")]], BusFalso())
+
+    resumen = await orq.ejecutar()
+
+    assert resumen.caso_de_uso is None

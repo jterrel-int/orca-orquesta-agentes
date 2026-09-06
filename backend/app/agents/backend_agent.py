@@ -1,4 +1,4 @@
-"""Agente 1: genera el modelo y los endpoints CRUD del backend."""
+"""Agente 1: genera el modelo y los endpoints del backend según el caso de uso."""
 
 from __future__ import annotations
 
@@ -9,14 +9,7 @@ from ..adaptadores.fabricas import construir_cerebro
 from ..config import config
 from ..dominio.puertos import Cerebro
 from .base import Agente, ContextoCorrida
-from .plantillas import ROUTER_ITEMS
-
-INSTRUCCION = (
-    "Escribe un router de FastAPI con CRUD completo para la entidad Item "
-    "(id, name). Usa SQLAlchemy async, dependencia obtener_sesion y los "
-    "esquemas ItemCrear/ItemActualizar/ItemLeer ya existentes. "
-    "Devuelve solo código Python, sin explicación ni cercas de markdown."
-)
+from .casos_de_uso import destino_backend, resolver_caso
 
 
 class BackendAgent(Agente):
@@ -26,18 +19,30 @@ class BackendAgent(Agente):
         self._cerebro = cerebro or construir_cerebro()
 
     async def ejecutar(self, ctx: ContextoCorrida) -> list[str]:
-        destino = Path(config.dir_generado_backend)
+        caso_id = ctx.datos.get("caso_de_uso")
+        definicion = resolver_caso(caso_id)
+        # "items" (o None) es el comportamiento histórico: pausas cortas y fijas.
+        # Los tres casos nuevos usan una pausa configurable para que una corrida
+        # completa se sienta como una demo real (ver duracion_paso_demo_s en
+        # config.py) sin volver más lenta la suite de tests del caso Items.
+        es_caso_nuevo = caso_id not in (None, "items")
+
+        destino = destino_backend()
         destino.mkdir(parents=True, exist_ok=True)
         (destino / "__init__.py").touch(exist_ok=True)
 
-        await self.log(ctx, "Definiendo el modelo Item (id, name, creado_en)")
-        await asyncio.sleep(0.4)
+        await self.log(ctx, definicion.mensaje_modelo_backend)
+        await asyncio.sleep(config.duracion_paso_demo_s if es_caso_nuevo else 0.4)
 
-        await self.log(ctx, "Generando el router CRUD de FastAPI")
+        for paso in definicion.pasos_extra_backend:
+            await self.log(ctx, paso)
+            await asyncio.sleep(config.duracion_paso_demo_s)
+
+        await self.log(ctx, definicion.mensaje_generando_backend)
         codigo = await self._cerebro.pensar(
-            INSTRUCCION,
-            contexto="Modelo: Item(id: int, name: str). Prefijo: /api/items",
-            respaldo=ROUTER_ITEMS,
+            definicion.instruccion_backend,
+            contexto=definicion.contexto_backend,
+            respaldo=definicion.respaldo_backend,
         )
         codigo = _limpiar_cercas(codigo)
 
@@ -48,19 +53,13 @@ class BackendAgent(Agente):
             compile(codigo, "<generado>", "exec")
         except SyntaxError as e:
             await self.log(ctx, f"El código generado no compila ({e}); se usa la plantilla")
-            codigo = ROUTER_ITEMS
+            codigo = definicion.respaldo_backend
 
-        archivo = destino / "item_routes.py"
+        archivo = destino / definicion.archivo_backend
         archivo.write_text(codigo, encoding="utf-8")
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(config.duracion_paso_demo_s if es_caso_nuevo else 0.3)
 
-        rutas = [
-            "GET /api/items",
-            "POST /api/items",
-            "GET /api/items/{id}",
-            "PUT /api/items/{id}",
-            "DELETE /api/items/{id}",
-        ]
+        rutas = list(definicion.rutas)
         # Canal hacia el FrontendAgent. No hay llamada directa entre agentes.
         ctx.datos["endpoints"] = rutas
         ctx.datos["router_generado"] = str(archivo)
