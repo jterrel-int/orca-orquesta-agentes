@@ -53,6 +53,21 @@ export default function ListaProyectos({
         );
       })}
       {proyectos.length === 0 && <p className="apagado sin-proyectos">Cargando proyectos…</p>}
+
+      <Link href="/proyectos/nuevo" className="fila-proyecto fila-nuevo-proyecto">
+        <span className="icono-proyecto icono-nuevo-proyecto" aria-hidden>
+          +
+        </span>
+        <span className="info-proyecto">
+          <strong>Nuevo proyecto</strong>
+          <span className="descripcion-proyecto">
+            Importá una especificación y convertila en tareas del backlog
+          </span>
+        </span>
+        <span className="chevron-proyecto" aria-hidden>
+          ›
+        </span>
+      </Link>
     </div>
   );
 }

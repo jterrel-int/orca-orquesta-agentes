@@ -491,6 +491,45 @@ textarea { resize: vertical; font-family: inherit; }
 
 .enlace-resultado { font-weight: 600; font-size: 0.88rem; }
 
+/* --- fila "+ Nuevo proyecto" --- */
+
+.fila-nuevo-proyecto { color: var(--apagado); }
+.fila-nuevo-proyecto:hover { color: var(--texto); }
+
+.icono-nuevo-proyecto {
+  background: var(--realce);
+  color: var(--apagado);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+/* --- nuevo proyecto: importar especificación --- */
+
+.etiqueta-campo {
+  font-size: 0.82rem;
+  color: var(--apagado);
+  margin-top: 0.2rem;
+}
+
+.resultado-generacion {
+  margin-top: 1.5rem;
+  padding: 1rem 1.1rem;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: 0 1px 3px rgba(11, 58, 77, 0.08);
+}
+
+.lista-tareas-generadas {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.lista-tareas-generadas li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.9rem; }
+
 /* --- caso: calculadora --- */
 
 .calculadora-login {

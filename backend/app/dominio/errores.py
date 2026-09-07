@@ -29,3 +29,9 @@ class OAuthFallido(ErrorDominio):
 
 class CredencialInvalida(ErrorDominio):
     """La credencial provista no fue aceptada por el proveedor externo."""
+
+
+class DocumentoNoLegible(ErrorDominio):
+    """El documento importado no tiene texto extraíble (formato no soportado,
+    o un PDF/imagen escaneada sin capa de texto).
+    """

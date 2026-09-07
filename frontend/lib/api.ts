@@ -60,6 +60,32 @@ export const agregarTareaBacklog = (datos: {
   lado: LadoBacklog;
 }) => pedir<TareaBacklog>("/api/backlog", { method: "POST", body: JSON.stringify(datos) });
 
+export type AlcanceGeneracion = "BE" | "FE" | "todo";
+
+/**
+ * Sube un documento de especificación (o pega texto) y devuelve las tareas
+ * que el backend generó y ya agregó a docs/BACKLOG.md. Es multipart, no
+ * JSON, así que no pasa por `pedir` — el navegador arma el boundary solo si
+ * no le fijamos un Content-Type nosotros.
+ */
+export async function generarTareasDesdeEspecificacion(datos: {
+  alcance: AlcanceGeneracion;
+  archivo?: File | null;
+  texto?: string;
+}): Promise<TareaBacklog[]> {
+  const cuerpo = new FormData();
+  cuerpo.set("alcance", datos.alcance);
+  if (datos.archivo) cuerpo.set("archivo", datos.archivo);
+  if (datos.texto) cuerpo.set("texto", datos.texto);
+
+  const res = await fetch(`${API}/api/backlog/generar`, { method: "POST", body: cuerpo });
+  if (!res.ok) {
+    const detalle = await res.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as TareaBacklog[];
+}
+
 // --- conexión con Vercel (OAuth) ---
 
 /** URL para abrir en una ventana emergente; el backend redirige a Vercel. */
