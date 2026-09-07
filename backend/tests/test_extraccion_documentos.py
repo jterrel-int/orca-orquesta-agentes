@@ -47,6 +47,25 @@ def test_extrae_docx_con_parrafos_reales() -> None:
     assert "Especificación funcional" in texto
 
 
+def test_docx_reconstruye_encabezados_desde_los_estilos_de_word() -> None:
+    """Sin esto, un Word real con estilos "Heading 1" se aplana a texto
+    plano sin ningún "#" — y el desglose heurístico lo trata como una sola
+    tarea en vez de una por sección, que es justo el bug reportado.
+    """
+    documento = Document()
+    documento.add_heading("Alta de productos", level=1)
+    documento.add_paragraph(TEXTO_LARGO)
+    documento.add_heading("Pantalla de catálogo", level=1)
+    documento.add_paragraph(TEXTO_LARGO)
+    buffer = io.BytesIO()
+    documento.save(buffer)
+
+    texto = extraer_texto("spec.docx", buffer.getvalue())
+
+    assert "# Alta de productos" in texto
+    assert "# Pantalla de catálogo" in texto
+
+
 def test_docx_vacio_da_documento_no_legible() -> None:
     documento = Document()
     buffer = io.BytesIO()

@@ -1,3 +1,4 @@
+from .anthropic_api import verificar_api_key
 from .backlog_markdown import RepositorioBacklogMarkdown
 from .bus_memoria import BusEventosMemoria, bus
 from .cerebro_anthropic import CerebroAnthropic
@@ -7,9 +8,11 @@ from .despliegue_vercel import DespliegueVercel
 from .fabricas import construir_cerebro, construir_desplegador
 from .oauth_vercel import intercambiar_code
 from .persistencia_sqlalchemy import (
+    CredencialAnthropicORM,
     CredencialRenderORM,
     CredencialVercelORM,
     ItemORM,
+    RepositorioCredencialAnthropicSQLAlchemy,
     RepositorioCredencialRenderSQLAlchemy,
     RepositorioCredencialVercelSQLAlchemy,
     RepositorioItemsSQLAlchemy,
@@ -29,9 +32,12 @@ __all__ = [
     "construir_cerebro",
     "construir_desplegador",
     "intercambiar_code",
+    "verificar_api_key",
+    "CredencialAnthropicORM",
     "CredencialRenderORM",
     "CredencialVercelORM",
     "ItemORM",
+    "RepositorioCredencialAnthropicSQLAlchemy",
     "RepositorioCredencialRenderSQLAlchemy",
     "RepositorioCredencialVercelSQLAlchemy",
     "RepositorioItemsSQLAlchemy",

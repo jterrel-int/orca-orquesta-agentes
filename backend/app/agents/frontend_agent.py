@@ -16,9 +16,12 @@ class FrontendAgent(Agente):
     name = "frontend"
 
     def __init__(self, cerebro: Cerebro | None = None) -> None:
-        self._cerebro = cerebro or construir_cerebro()
+        # Ver el comentario equivalente en BackendAgent: construir_cerebro()
+        # es async, así que se resuelve recién en ejecutar().
+        self._cerebro_dado = cerebro
 
     async def ejecutar(self, ctx: ContextoCorrida) -> list[str]:
+        cerebro = self._cerebro_dado or await construir_cerebro()
         caso_id = ctx.datos.get("caso_de_uso")
         definicion = resolver_caso(caso_id)
         es_caso_nuevo = caso_id not in (None, "items")
@@ -42,7 +45,7 @@ class FrontendAgent(Agente):
             await asyncio.sleep(config.duracion_paso_demo_s)
 
         await self.log(ctx, definicion.mensaje_generando_frontend)
-        codigo = await self._cerebro.pensar(
+        codigo = await cerebro.pensar(
             definicion.instruccion_frontend,
             contexto="Endpoints disponibles:\n" + "\n".join(endpoints),
             respaldo=definicion.respaldo_frontend,

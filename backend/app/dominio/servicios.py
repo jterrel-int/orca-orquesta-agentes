@@ -139,13 +139,21 @@ def _instruccion(alcance: Alcance) -> str:
     return (
         "Sos un tech lead dividiendo una especificación funcional/técnica en tareas de "
         "backlog concretas y accionables para un equipo de agentes de IA. Leé la "
-        "especificación completa en el contexto y devolvé ENTRE 3 Y 15 tareas. "
+        "especificación completa en el contexto: identificá cada requerimiento, pantalla, "
+        "endpoint o regla de negocio distinta que describe, y convertí cada uno en su "
+        "propia tarea. NUNCA devuelvas una sola tarea que resuma todo el documento — si "
+        "el documento describe 5 funcionalidades, la respuesta tiene 5 tareas (o más, una "
+        "por sub-tarea técnica si una funcionalidad requiere varios pasos claramente "
+        "separables). Devolvé ENTRE 3 Y 15 tareas en total; si el documento da para menos "
+        "de 3 tareas reales, dividí igual por aspecto técnico (ej. modelo de datos, "
+        "endpoint, validaciones) en vez de agrupar todo. "
         f"{restriccion} Cada tarea tiene un título corto (menos de 100 caracteres) y un "
         "cuerpo en markdown con esta forma: 1-3 líneas describiendo qué hay que hacer, "
         "seguidas de '**Archivos:** ...', '**Verificación:** ...' y '**Depende de:** ...' "
-        "(usá 'nada' si no depende de otra tarea de esta misma lista). Devolvé "
-        "ÚNICAMENTE un array JSON, sin cercas de markdown ni texto fuera del array, con "
-        'esta forma exacta: [{"lado": "BE"|"FE", "titulo": "...", "cuerpo": "..."}]'
+        "(usá 'nada' si no depende de otra tarea de esta misma lista, o referenciá la tarea "
+        "de la que depende por su título). Devolvé ÚNICAMENTE un array JSON, sin cercas de "
+        "markdown ni texto fuera del array, con esta forma exacta: "
+        '[{"lado": "BE"|"FE", "titulo": "...", "cuerpo": "..."}]'
     )
 
 
@@ -181,12 +189,17 @@ def _serializar(esbozos: list[_EsbozoTarea]) -> str:
 
 
 def _dividir_heuristicamente(texto: str, alcance: Alcance) -> list[_EsbozoTarea]:
-    """División determinista sin IA: por encabezados de markdown, o si no hay
-    suficientes, por ítems de lista numerada. Es la que usa el cerebro
-    guionado (sin red) y el respaldo si el cerebro real falla — más tosca que
-    una lectura real, pero siempre produce algo revisable.
+    """División determinista sin IA, en tres niveles — cada uno se prueba solo
+    si el anterior no encontró al menos 2 secciones: (1) encabezados de
+    markdown (`#`/`##`/`###` — incluye los que reconstruye
+    `extraccion_documentos._extraer_docx` a partir de los estilos "Heading N"
+    de Word), (2) ítems de lista numerada, (3) párrafos separados por línea
+    en blanco. Es la que usa el cerebro guionado (sin conexión configurada) y
+    el respaldo si el cerebro real falla — más tosca que una lectura real,
+    pero siempre reparte el documento en varias tareas revisables en vez de
+    devolver todo el texto como una sola.
     """
-    secciones = _partir_por_encabezados(texto)[:_MAX_TAREAS]
+    secciones = _partir_en_secciones(texto)[:_MAX_TAREAS]
     if not secciones:
         secciones = [("Especificación importada", texto)]
 
@@ -197,8 +210,8 @@ def _dividir_heuristicamente(texto: str, alcance: Alcance) -> list[_EsbozoTarea]
         cuerpo = (
             f"{resumen}\n\n"
             "**Archivos:** por definir — tarea generada automáticamente a partir de un "
-            "documento importado, sin revisión de un modelo de lenguaje real (no hay "
-            "ANTHROPIC_API_KEY configurada). Revisar antes de asignar.\n\n"
+            "documento importado, sin revisión de un modelo de lenguaje real (no hay una "
+            "conexión con Anthropic activa; ver Configuración). Revisar antes de asignar.\n\n"
             "**Verificación:** por definir.\n\n"
             "**Depende de:** nada."
         )
@@ -206,12 +219,20 @@ def _dividir_heuristicamente(texto: str, alcance: Alcance) -> list[_EsbozoTarea]
     return esbozos
 
 
-def _partir_por_encabezados(texto: str) -> list[tuple[str, str]]:
-    posiciones = [(m.start(), m.group(1).strip()) for m in _PATRON_ENCABEZADO_MD.finditer(texto)]
-    if len(posiciones) < 2:
-        posiciones = [
-            (m.start(), m.group(1).strip()) for m in _PATRON_LISTA_NUMERADA.finditer(texto)
-        ]
+def _partir_en_secciones(texto: str) -> list[tuple[str, str]]:
+    secciones = _partir_por_posiciones(texto, _PATRON_ENCABEZADO_MD)
+    if len(secciones) >= 2:
+        return secciones
+
+    secciones = _partir_por_posiciones(texto, _PATRON_LISTA_NUMERADA)
+    if len(secciones) >= 2:
+        return secciones
+
+    return _partir_por_parrafos(texto)
+
+
+def _partir_por_posiciones(texto: str, patron: re.Pattern[str]) -> list[tuple[str, str]]:
+    posiciones = [(m.start(), m.group(1).strip()) for m in patron.finditer(texto)]
     if len(posiciones) < 2:
         return []
 
@@ -220,6 +241,24 @@ def _partir_por_encabezados(texto: str) -> list[tuple[str, str]]:
         fin = posiciones[i + 1][0] if i + 1 < len(posiciones) else len(texto)
         cuerpo = "\n".join(texto[inicio:fin].splitlines()[1:]).strip()
         secciones.append((titulo, cuerpo))
+    return secciones
+
+
+def _partir_por_parrafos(texto: str) -> list[tuple[str, str]]:
+    """Último nivel: sin ningún encabezado ni lista reconocible (típico de un
+    PDF cuyo texto extraído perdió todo el formato), al menos separar por
+    párrafos (línea en blanco) en vez de tratar el documento entero como una
+    sola tarea. El título de cada una sale de su primera oración.
+    """
+    parrafos = [p.strip() for p in re.split(r"\n\s*\n", texto) if len(p.strip()) >= 40]
+    if len(parrafos) < 2:
+        return []
+
+    secciones = []
+    for parrafo in parrafos:
+        primera_linea = parrafo.splitlines()[0].strip()
+        titulo = re.split(r"(?<=[.!?])\s", primera_linea, maxsplit=1)[0][:90]
+        secciones.append((titulo or "Sección de la especificación", parrafo))
     return secciones
 
 

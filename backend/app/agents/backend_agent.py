@@ -16,9 +16,13 @@ class BackendAgent(Agente):
     name = "backend"
 
     def __init__(self, cerebro: Cerebro | None = None) -> None:
-        self._cerebro = cerebro or construir_cerebro()
+        # `construir_cerebro()` es async (puede leer una credencial guardada
+        # en SQLite), así que no se resuelve acá: se resuelve en `ejecutar`,
+        # una vez por corrida, salvo que ya venga uno inyectado (tests).
+        self._cerebro_dado = cerebro
 
     async def ejecutar(self, ctx: ContextoCorrida) -> list[str]:
+        cerebro = self._cerebro_dado or await construir_cerebro()
         caso_id = ctx.datos.get("caso_de_uso")
         definicion = resolver_caso(caso_id)
         # "items" (o None) es el comportamiento histórico: pausas cortas y fijas.
@@ -39,7 +43,7 @@ class BackendAgent(Agente):
             await asyncio.sleep(config.duracion_paso_demo_s)
 
         await self.log(ctx, definicion.mensaje_generando_backend)
-        codigo = await self._cerebro.pensar(
+        codigo = await cerebro.pensar(
             definicion.instruccion_backend,
             contexto=definicion.contexto_backend,
             respaldo=definicion.respaldo_backend,

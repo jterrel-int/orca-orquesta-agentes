@@ -12,9 +12,17 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .adaptadores.fabricas import estado_cerebro
 from .adaptadores.persistencia_sqlalchemy import crear_tablas
 from .agents.casos_de_uso import archivos_backend_generados
-from .api import backlog_router, corridas_router, items_router, render_router, vercel_router
+from .api import (
+    anthropic_router,
+    backlog_router,
+    corridas_router,
+    items_router,
+    render_router,
+    vercel_router,
+)
 from .api.corridas import registrar_post_corrida
 from .config import config
 from .websocket import gestor, ws_router
@@ -100,14 +108,19 @@ app.include_router(corridas_router)
 app.include_router(backlog_router)
 app.include_router(vercel_router)
 app.include_router(render_router)
+app.include_router(anthropic_router)
 app.include_router(ws_router)
 
 
 @app.get("/api/health", tags=["salud"])
 async def salud() -> dict[str, Any]:
+    cerebro = await estado_cerebro()
     return {
         "ok": True,
         "brain": config.brain,
+        "cerebro_activo": cerebro["activo"],
+        "cerebro_modelo": cerebro["modelo"],
+        "cerebro_fuente": cerebro["fuente"],
         "deploy_enabled": config.deploy_enabled,
         "conexiones_ws": gestor.n_conexiones,
         "advertencias": config.advertencias(),

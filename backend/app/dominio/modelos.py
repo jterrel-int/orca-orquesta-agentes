@@ -86,3 +86,15 @@ class CredencialRender:
 
     api_key: str
     creado_en: datetime | None = None
+
+
+@dataclass
+class CredencialAnthropic:
+    """API key de la consola de Anthropic (console.anthropic.com), ya
+    verificada con una llamada real antes de guardarse. No tiene relación con
+    una sesión de claude.ai o Claude Code: es una credencial de la API,
+    facturada aparte.
+    """
+
+    api_key: str
+    creado_en: datetime | None = None

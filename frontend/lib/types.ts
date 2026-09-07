@@ -45,12 +45,25 @@ export interface Item {
 export interface Salud {
   ok: boolean;
   brain: string;
+  /** "anthropic" | "scripted" — qué cerebro está activo ahora mismo. */
+  cerebro_activo: string;
+  cerebro_modelo: string | null;
+  /** "guardada en Configuración" | "variable de entorno ANTHROPIC_API_KEY" | null. */
+  cerebro_fuente: string | null;
   deploy_enabled: boolean;
   conexiones_ws: number;
   /** Configuración que arrancó igual pero probablemente no es la esperada. */
   advertencias: string[];
   vercel_token_configurado: boolean;
   origenes_permitidos: string[];
+}
+
+/** Espeja GET /api/anthropic/estado y la respuesta de POST /api/anthropic/conexion. */
+export interface EstadoAnthropic {
+  conectado: boolean;
+  modelo: string;
+  /** Los últimos caracteres de la key, nunca la key completa. */
+  clave?: string;
 }
 
 /** Los agentes que el dashboard muestra, en el orden del pipeline. */

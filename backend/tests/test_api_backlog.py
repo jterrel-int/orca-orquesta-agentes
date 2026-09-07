@@ -89,10 +89,10 @@ async def test_generar_con_archivo_demasiado_grande_da_413(cliente: httpx.AsyncC
     assert r.status_code == 413
 
 
-def test_obtener_servicio_backlog_inyecta_un_cerebro() -> None:
+async def test_obtener_servicio_backlog_inyecta_un_cerebro() -> None:
     """No es None: sin esto, generar_desde_especificacion nunca usaría un
-    cerebro real aunque BRAIN=anthropic esté configurado.
+    cerebro real aunque hubiera una API key configurada.
     """
-    servicio = api_backlog.obtener_servicio_backlog()
+    servicio = await api_backlog.obtener_servicio_backlog()
     assert isinstance(servicio, ServicioBacklog)
     assert servicio._cerebro is not None

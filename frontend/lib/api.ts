@@ -1,5 +1,6 @@
 import type {
   CasoDeUso,
+  EstadoAnthropic,
   EstadoRender,
   EstadoVercel,
   Item,
@@ -106,5 +107,18 @@ export const conectarRender = (apiKey: string) =>
   });
 
 export const desconectarRender = () => pedir<void>("/api/render/conexion", { method: "DELETE" });
+
+// --- conexión con Anthropic (API key, no la sesión de claude.ai/Claude Code) ---
+
+export const estadoAnthropic = () => pedir<EstadoAnthropic>("/api/anthropic/estado");
+
+export const conectarAnthropic = (apiKey: string) =>
+  pedir<EstadoAnthropic>("/api/anthropic/conexion", {
+    method: "POST",
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+
+export const desconectarAnthropic = () =>
+  pedir<void>("/api/anthropic/conexion", { method: "DELETE" });
 
 export type { Item };

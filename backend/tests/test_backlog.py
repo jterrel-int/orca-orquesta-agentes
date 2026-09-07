@@ -136,6 +136,34 @@ async def test_generar_documento_sin_encabezados_da_una_sola_tarea(tmp_path: Pat
     assert creadas[0].lado == "FE"
 
 
+# Simula el texto que sale de un PDF sin ningún formato reconstruible: sin
+# "#", sin "1.", solo párrafos separados por línea en blanco.
+ESPECIFICACION_SIN_FORMATO = (
+    "El sistema debe permitir el alta de un producto con nombre, precio y stock, "
+    "guardándolo en la base de datos mediante un endpoint dedicado.\n\n"
+    "La pantalla principal debe mostrar un listado de productos en tarjetas, con "
+    "un botón para agregar uno nuevo mediante un formulario emergente.\n\n"
+    "Cada vez que se vende un producto hay que descontar el stock disponible y "
+    "registrar la operación para auditoría."
+)
+
+
+async def test_generar_documento_sin_encabezados_pero_con_parrafos_da_varias_tareas(
+    tmp_path: Path,
+) -> None:
+    """Este es el bug reportado: un documento real (típicamente un PDF) sin
+    "#" ni listas numeradas antes caía siempre a una sola tarea que resumía
+    todo el documento. Ahora al menos se reparte por párrafo.
+    """
+    servicio = ServicioBacklog(RepositorioBacklogMarkdown(tmp_path / "BACKLOG.md"))
+
+    creadas = await servicio.generar_desde_especificacion(ESPECIFICACION_SIN_FORMATO, "todo")
+
+    assert len(creadas) == 3
+    lados = {t.lado for t in creadas}
+    assert lados <= {"BE", "FE"}
+
+
 class _CerebroFalso:
     """Cerebro de prueba: devuelve JSON fijo, ignora la instrucción."""
 

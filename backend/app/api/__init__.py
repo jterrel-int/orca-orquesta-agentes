@@ -1,3 +1,4 @@
+from .anthropic import router as anthropic_router
 from .backlog import router as backlog_router
 from .corridas import router as corridas_router
 from .items import router as items_router
@@ -10,4 +11,5 @@ __all__ = [
     "backlog_router",
     "vercel_router",
     "render_router",
+    "anthropic_router",
 ]

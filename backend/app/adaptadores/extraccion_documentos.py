@@ -8,6 +8,7 @@ principio que `backlog_markdown.py` aplica para docs/BACKLOG.md.
 from __future__ import annotations
 
 import io
+import re
 
 from docx import Document
 from pypdf import PdfReader
@@ -58,6 +59,31 @@ def _extraer_pdf(contenido: bytes) -> str:
     return "\n".join(pagina.extract_text() or "" for pagina in lector.pages)
 
 
+_PATRON_NIVEL_ENCABEZADO = re.compile(r"heading\s*(\d)", re.IGNORECASE)
+
+
 def _extraer_docx(contenido: bytes) -> str:
+    """Reconstruye encabezados markdown a partir de los estilos "Heading N"/
+    "Title" de Word, y viñetas a partir de "List Bullet"/"List Number" — sin
+    esto, el desglose por encabezados que hace `dominio.servicios` no puede
+    distinguir un título de un párrafo cualquiera, porque un .docx no usa
+    "#" para nada: la jerarquía vive en el estilo del párrafo, que se pierde
+    si solo se junta `parrafo.text`.
+    """
     documento = Document(io.BytesIO(contenido))
-    return "\n".join(parrafo.text for parrafo in documento.paragraphs)
+    lineas: list[str] = []
+    for parrafo in documento.paragraphs:
+        texto = parrafo.text.strip()
+        if not texto:
+            continue
+        estilo = (parrafo.style.name if parrafo.style else "") or ""
+        coincidencia = _PATRON_NIVEL_ENCABEZADO.search(estilo)
+        if estilo.lower() == "title" or (coincidencia and coincidencia.group(1) == "1"):
+            lineas.append(f"# {texto}")
+        elif coincidencia:
+            lineas.append(f"{'#' * min(int(coincidencia.group(1)), 3)} {texto}")
+        elif "list bullet" in estilo.lower() or "list number" in estilo.lower():
+            lineas.append(f"- {texto}")
+        else:
+            lineas.append(texto)
+    return "\n".join(lineas)

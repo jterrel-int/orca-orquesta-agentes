@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Protocol, runtime_checkable
 
-from .modelos import CredencialVercel, EventoAgente, Item, TareaBacklog
+from .modelos import CredencialAnthropic, CredencialVercel, EventoAgente, Item, TareaBacklog
 
 EmisorLinea = Callable[[str], Awaitable[None]]
 
@@ -66,4 +66,16 @@ class RepositorioCredencialVercel(Protocol):
 
     async def guardar(self, credencial: CredencialVercel) -> None: ...
     async def obtener(self) -> CredencialVercel | None: ...
+    async def eliminar(self) -> None: ...
+
+
+@runtime_checkable
+class RepositorioCredencialAnthropic(Protocol):
+    """Guarda la API key de Anthropic pegada desde Configuración.
+    `construir_cerebro()` la prefiere sobre ANTHROPIC_API_KEY cuando hay una
+    guardada — mismo criterio que Vercel con su token OAuth.
+    """
+
+    async def guardar(self, credencial: CredencialAnthropic) -> None: ...
+    async def obtener(self) -> CredencialAnthropic | None: ...
     async def eliminar(self) -> None: ...

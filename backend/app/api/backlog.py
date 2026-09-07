@@ -41,9 +41,9 @@ def _a_leer(tarea: TareaBacklog) -> TareaLeer:
     return TareaLeer(id=tarea.id, titulo=tarea.titulo, cuerpo=tarea.cuerpo, lado=tarea.lado)
 
 
-def obtener_servicio_backlog() -> ServicioBacklog:
+async def obtener_servicio_backlog() -> ServicioBacklog:
     repo = RepositorioBacklogMarkdown(Path(config.ruta_backlog))
-    return ServicioBacklog(repo, construir_cerebro())
+    return ServicioBacklog(repo, await construir_cerebro())
 
 
 @router.get("", response_model=list[TareaLeer])
