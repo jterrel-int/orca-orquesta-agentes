@@ -12,7 +12,20 @@ const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "todas", etiqueta: "Todas" },
   { valor: "BE", etiqueta: "Backend" },
   { valor: "FE", etiqueta: "Frontend" },
+  { valor: "DE", etiqueta: "Deploy" },
 ];
+
+const MATIZ_LADO: Record<LadoBacklog, string> = {
+  BE: "var(--backend)",
+  FE: "var(--frontend)",
+  DE: "var(--deploy)",
+};
+
+const CLASE_LADO: Record<LadoBacklog, string> = {
+  BE: "backend",
+  FE: "frontend",
+  DE: "deploy",
+};
 
 export default function PaginaBacklog() {
   const [tareas, setTareas] = useState<TareaBacklog[]>([]);
@@ -69,10 +82,10 @@ export default function PaginaBacklog() {
                 <article
                   key={t.id}
                   className="tarjeta-tarea"
-                  style={{ ["--matiz" as string]: t.lado === "BE" ? "var(--backend)" : "var(--frontend)" }}
+                  style={{ ["--matiz" as string]: MATIZ_LADO[t.lado] }}
                 >
                   <div className="cabecera-tarea">
-                    <span className={`pastilla-lado ${t.lado === "BE" ? "backend" : "frontend"}`}>
+                    <span className={`pastilla-lado ${CLASE_LADO[t.lado]}`}>
                       {t.id}
                     </span>
                     <h3>{t.titulo}</h3>

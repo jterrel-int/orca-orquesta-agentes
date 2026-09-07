@@ -60,7 +60,7 @@ class ResumenCorrida:
     caso_de_uso: str | None = None
 
 
-Lado = Literal["BE", "FE"]
+Lado = Literal["BE", "FE", "DE"]
 
 
 @dataclass

@@ -56,7 +56,7 @@ export interface Salud {
 /** Los agentes que el dashboard muestra, en el orden del pipeline. */
 export const AGENTES = ["backend", "frontend", "deploy"] as const;
 
-export type LadoBacklog = "BE" | "FE";
+export type LadoBacklog = "BE" | "FE" | "DE";
 
 /** Espeja una tarea parseada de docs/BACKLOG.md. */
 export interface TareaBacklog {

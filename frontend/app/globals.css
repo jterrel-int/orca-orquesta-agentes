@@ -370,6 +370,7 @@ textarea { resize: vertical; font-family: inherit; }
 }
 .pastilla-lado.backend { color: var(--backend); border: 1px solid var(--backend); }
 .pastilla-lado.frontend { color: var(--frontend); border: 1px solid var(--frontend); }
+.pastilla-lado.deploy { color: var(--deploy); border: 1px solid var(--deploy); }
 
 .cuerpo-tarea {
   display: flex;

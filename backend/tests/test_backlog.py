@@ -30,6 +30,14 @@ Un selector sobre LogStream.
 **Depende de:** nada.
 
 ---
+
+## DE-01 — Notificar despliegues fallidos
+
+Avisar cuando un deploy falla.
+
+**Depende de:** nada.
+
+---
 """
 
 
@@ -39,11 +47,12 @@ def test_listar_parsea_las_tareas_existentes(tmp_path: Path) -> None:
 
     tareas = RepositorioBacklogMarkdown(ruta).listar()
 
-    assert [t.id for t in tareas] == ["BE-01", "FE-01"]
+    assert [t.id for t in tareas] == ["BE-01", "FE-01", "DE-01"]
     assert tareas[0].titulo == "TestAgent: cuarta etapa del pipeline"
     assert tareas[0].lado == "BE"
     assert "pytest" in tareas[0].cuerpo
     assert tareas[1].lado == "FE"
+    assert tareas[2].lado == "DE"
 
 
 def test_listar_sobre_archivo_inexistente_devuelve_vacio(tmp_path: Path) -> None:
@@ -61,7 +70,7 @@ def test_agregar_escribe_una_seccion_nueva(tmp_path: Path) -> None:
     assert creada.id == "BE-02"  # siguiente número disponible para BE
 
     tareas = repo.listar()
-    assert [t.id for t in tareas] == ["BE-01", "FE-01", "BE-02"]
+    assert [t.id for t in tareas] == ["BE-01", "FE-01", "DE-01", "BE-02"]
     assert tareas[-1].titulo == "Nueva tarea"
     assert tareas[-1].cuerpo == "Descripción de la tarea nueva."
 

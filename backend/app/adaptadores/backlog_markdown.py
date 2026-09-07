@@ -39,7 +39,8 @@ class RepositorioBacklogMarkdown:
             id_tarea, titulo = coincidencia.group(1), coincidencia.group(2)
             cuerpo = "\n".join(lineas[1:]).strip()
             cuerpo = re.sub(r"\n?-{3,}\s*$", "", cuerpo).strip()
-            lado: Lado = "BE" if id_tarea.upper().startswith("BE") else "FE"
+            prefijo = id_tarea[:2].upper()
+            lado: Lado = prefijo if prefijo in ("BE", "FE", "DE") else "FE"  # type: ignore[assignment]
             tareas.append(TareaBacklog(id=id_tarea, titulo=titulo, cuerpo=cuerpo, lado=lado))
 
         return tareas

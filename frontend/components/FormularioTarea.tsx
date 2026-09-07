@@ -4,6 +4,12 @@ import { useState, type FormEvent } from "react";
 import { agregarTareaBacklog } from "@/lib/api";
 import type { LadoBacklog, TareaBacklog } from "@/lib/types";
 
+const LADOS: { valor: LadoBacklog; etiqueta: string }[] = [
+  { valor: "BE", etiqueta: "Backend" },
+  { valor: "FE", etiqueta: "Frontend" },
+  { valor: "DE", etiqueta: "Deploy" },
+];
+
 export default function FormularioTarea({
   onCreada,
 }: {
@@ -33,15 +39,21 @@ export default function FormularioTarea({
 
   return (
     <form className="form-tarea" onSubmit={enviar}>
+      <div className="tabs-lado" role="tablist" aria-label="Frente de la tarea nueva">
+        {LADOS.map((l) => (
+          <button
+            key={l.valor}
+            type="button"
+            role="tab"
+            aria-selected={lado === l.valor}
+            className={lado === l.valor ? "activo" : ""}
+            onClick={() => setLado(l.valor)}
+          >
+            {l.etiqueta}
+          </button>
+        ))}
+      </div>
       <div className="fila-alta">
-        <select
-          value={lado}
-          onChange={(e) => setLado(e.target.value as LadoBacklog)}
-          aria-label="Lado"
-        >
-          <option value="BE">Backend</option>
-          <option value="FE">Frontend</option>
-        </select>
         <input
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}

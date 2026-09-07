@@ -19,14 +19,14 @@ router = APIRouter(prefix="/api/backlog", tags=["backlog"])
 class TareaCrear(BaseModel):
     titulo: str = Field(min_length=1, max_length=140)
     cuerpo: str = Field(min_length=1, max_length=4000)
-    lado: Literal["BE", "FE"]
+    lado: Literal["BE", "FE", "DE"]
 
 
 class TareaLeer(BaseModel):
     id: str
     titulo: str
     cuerpo: str
-    lado: Literal["BE", "FE"]
+    lado: Literal["BE", "FE", "DE"]
 
 
 def _a_leer(tarea: TareaBacklog) -> TareaLeer:
