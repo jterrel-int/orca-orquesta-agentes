@@ -383,3 +383,83 @@ varias respuestas y confirmar que el promedio y el conteo por puntaje se
 actualizan.
 
 **Depende de:** BE-08.
+
+---
+
+## BE-09 — `.gitignore` incompleto para los routers generados de los casos nuevos
+
+`.gitignore` solo ignora `backend/app/generated/item_routes.py`. Los routers
+que escribe `BackendAgent` para los tres casos de BE-06/07/08
+(`calculadora_routes.py`, `leads_routes.py`, `encuesta_routes.py`) no están
+listados, así que después de correr cualquiera de esos casos quedan como
+archivos sin trackear en `git status` — confirmado corriendo los 3 casos en
+la verificación post-merge del 2026-09-06 (ver `docs/BITACORA.md`).
+
+**Archivos:** `.gitignore` (agregar los tres archivos, o cambiar a un patrón
+que cubra cualquier archivo nuevo en `backend/app/generated/` salvo
+`.gitkeep`/`__init__.py` — así no hace falta tocarlo de nuevo si se agrega un
+quinto caso de uso).
+
+**Verificación:** lanzar los 4 casos (`items`, `calculadora`,
+`leads_zapatillas`, `encuesta`) con `POST /api/run` y confirmar con `git
+status --short` que `backend/app/generated/` no aparece con archivos sin
+trackear.
+
+**Depende de:** nada.
+
+---
+
+## BE-10 — `montar_router_generado` remonta todos los casos en cada corrida, no solo el nuevo
+
+`main.py:_post_corrida` llama `montar_router_generado(app)` al terminar
+cualquier corrida, y esa función recorre `archivos_backend_generados()`
+completo — todos los casos que alguna vez se generaron y siguen en disco,
+no solo el que acaba de correr — y vuelve a hacer
+`app.include_router(...)` sobre cada uno. Confirmado en los logs de una
+sesión real: tras la corrida de "leads" se remontaron `item_routes.py`,
+`calculadora_routes.py` y `leads_routes.py` los tres, cuando solo
+`leads_routes.py` era nuevo. Cada remontaje reimporta el módulo bajo un
+`spec` nuevo, lo que dispara `SAWarning` de SQLAlchemy por cada clase ORM
+del caso (ya visible en `pytest -q`, 23 warnings) y deja objetos `Route`
+duplicados acumulándose en `app.routes` para el mismo path dentro del mismo
+proceso de larga duración. No rompe nada hoy (`extend_existing=True` evita
+que explote, y los endpoints responden igual), pero es un desperdicio que
+crece sin límite mientras el proceso siga vivo.
+
+Alternativa a evaluar: que `montar_router_generado` lleve un registro de
+qué módulos ya están montados en esa instancia de `app` (por ejemplo, un
+`set` de nombres de archivo en `app.state`) y salte los que ya estén, en vez
+de recorrer y remontar todo cada vez.
+
+**Archivos:** `backend/app/main.py` (`montar_router_generado`,
+`_post_corrida`), `backend/tests/test_montaje_generado.py` (ampliar para
+afirmar que un segundo llamado no duplica rutas en `app.routes`, no solo que
+"no explota").
+
+**Verificación:** `pytest -q` con el test ampliado en verde; manualmente,
+lanzar dos corridas seguidas de casos distintos y confirmar (contando
+`app.routes` o revisando los logs) que cada archivo se monta una sola vez
+por proceso.
+
+**Depende de:** nada.
+
+---
+
+## FE-10 — Distinguir visualmente la opción "Items" en "Casos de prueba"
+
+FE-06 pedía que el botón "Ejecutar agentes" genérico (Items) se mantuviera
+"más chico, como cuarta opción" dentro de la sección "Casos de prueba". La
+implementación actual (`CasoDePruebaCard`) renderiza las 4 opciones con el
+mismo tamaño y markup — funciona igual que las demás pero no hay diferencia
+visual que la marque como la opción "clásica"/de respaldo frente a los 3
+casos de demo nuevos.
+
+**Archivos:** `frontend/app/page.tsx` (cómo se renderiza la card de
+`items` dentro de `rejilla-casos`), `frontend/components/CasoDePruebaCard.tsx`
+(o una variante/prop `chico`), `frontend/app/globals.css`.
+
+**Verificación:** `npx tsc --noEmit`, `npm run build`; manualmente, en el
+Panel, confirmar que la tarjeta de Items se distingue visualmente (tamaño o
+jerarquía) de las 3 tarjetas de casos de demo, sin perder funcionalidad.
+
+**Depende de:** FE-06 (ya fusionada).
