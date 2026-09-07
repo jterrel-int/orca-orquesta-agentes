@@ -1,44 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import AgentCard from "@/components/AgentCard";
-import CasoDePruebaCard from "@/components/CasoDePruebaCard";
+import Link from "next/link";
 import EstadoSistema from "@/components/EstadoSistema";
-import LogStream from "@/components/LogStream";
+import ListaProyectos from "@/components/ListaProyectos";
 import { casosDeUso, estadoCorrida } from "@/lib/api";
 import { useEventos } from "@/lib/ws";
-import { AGENTES, type CasoDeUso, type EstadoAgente, type EventoAgente, type ResumenCorrida } from "@/lib/types";
-
-/**
- * El estado de cada agente se deriva del stream de eventos, no de un sondeo al
- * backend. El WebSocket ya trae todo lo necesario; un GET periódico solo
- * agregaría otra fuente de verdad que puede contradecir a la primera.
- */
-function derivarEstados(eventos: EventoAgente[]) {
-  const mapa = new Map<string, { status: EstadoAgente; ultimo: string }>();
-  for (const nombre of AGENTES) mapa.set(nombre, { status: "pending", ultimo: "" });
-  for (const e of eventos) {
-    if (!mapa.has(e.agent)) continue;
-    mapa.set(e.agent, { status: e.status, ultimo: e.msg });
-  }
-  return mapa;
-}
-
-/** Dónde escribe FrontendAgent el componente de cada caso — ver casos_de_uso.py::destino_frontend. */
-const RUTA_RESULTADO: Record<string, string> = {
-  items: "/items",
-  calculadora: "/casos/calculadora",
-  leads_zapatillas: "/casos/leads_zapatillas",
-  encuesta: "/casos/encuesta",
-};
+import type { CasoDeUso, ResumenCorrida } from "@/lib/types";
 
 export default function Panel() {
   const { eventos, conexion } = useEventos();
-  const estados = useMemo(() => derivarEstados(eventos), [eventos]);
-
   const [casos, setCasos] = useState<CasoDeUso[]>([]);
   const [resumen, setResumen] = useState<ResumenCorrida | null>(null);
-  const [casoSolicitado, setCasoSolicitado] = useState<string | null>(null);
 
   useEffect(() => {
     casosDeUso()
@@ -61,15 +34,13 @@ export default function Panel() {
     return ultimoOrq?.status === "running" || resumen?.status === "running";
   }, [eventos, resumen]);
 
-  // Cuál caso resaltar como "corriendo": lo que se pidió recién (para reaccionar
-  // al instante) o, si ya llegó, lo que confirma el backend.
-  const casoActivo = resumen?.status === "running" ? resumen.caso_de_uso ?? "items" : casoSolicitado;
+  const proyectoActivo = casos.find((c) => (resumen?.caso_de_uso ?? "items") === c.id);
 
   return (
     <>
       <header className="cabecera">
-        <h1>Panel</h1>
-        <span className="sub">ejecución de agentes en vivo</span>
+        <h1>Proyectos</h1>
+        <span className="sub">casos de prueba para ver a los agentes trabajar</span>
         <div className="derecha">
           <span
             className={`pastilla ${conexion === "conectado" ? "viva" : conexion === "desconectado" ? "muerta" : ""}`}
@@ -82,39 +53,17 @@ export default function Panel() {
       <main className="contenido">
         <EstadoSistema />
 
-        <h2 style={{ fontSize: "0.95rem", margin: "0 0 0.6rem" }}>Casos de prueba</h2>
-        <section className="rejilla-casos" aria-label="Casos de prueba">
-          {casos.map((caso) => (
-            <CasoDePruebaCard
-              key={caso.id}
-              caso={caso}
-              corriendo={corriendo}
-              activa={corriendo && casoActivo === caso.id}
-              mostrarResultado={
-                resumen?.status === "done" && (resumen.caso_de_uso ?? "items") === caso.id
-              }
-              rutaResultado={RUTA_RESULTADO[caso.id] ?? "/"}
-              onLanzada={setCasoSolicitado}
-            />
-          ))}
-        </section>
+        {corriendo && proyectoActivo && (
+          <div className="banner-corriendo">
+            <span aria-hidden>{proyectoActivo.icono}</span>
+            <span>
+              <strong>{proyectoActivo.nombre}</strong> se está ejecutando ahora.
+            </span>
+            <Link href={`/proyectos/${proyectoActivo.id}`}>Ver progreso →</Link>
+          </div>
+        )}
 
-        <section className="rejilla-agentes" aria-label="Estado por agente">
-          {AGENTES.map((nombre) => {
-            const est = estados.get(nombre)!;
-            return (
-              <AgentCard
-                key={nombre}
-                agente={nombre}
-                status={est.status}
-                ultimo={est.ultimo}
-              />
-            );
-          })}
-        </section>
-
-        <h2 style={{ fontSize: "0.95rem", margin: "0 0 0.6rem" }}>Logs en vivo</h2>
-        <LogStream eventos={eventos} />
+        <ListaProyectos proyectos={casos} resumen={resumen} />
       </main>
     </>
   );
