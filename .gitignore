@@ -5,8 +5,6 @@ __pycache__/
 venv/
 *.db
 
-# Código generado por los agentes en cada corrida
-backend/app/generated/item_routes.py
 
 # Node / Next
 node_modules/
@@ -24,3 +22,9 @@ out/
 .claude/settings.local.json
 
 .DS_Store
+
+# Espacios de trabajo de la fábrica: código generado por encargo
+fabrica_espacios/
+
+# TypeScript incremental
+*.tsbuildinfo

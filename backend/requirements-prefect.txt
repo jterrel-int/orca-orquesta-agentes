@@ -1,0 +1,8 @@
+# Opcional: solo para FABRICA_ORQUESTADOR=prefect (ver app/orchestrator/prefect_opcional.py).
+#   pip install -r requirements-prefect.txt
+#   prefect server start   # UI en http://127.0.0.1:4200
+prefect>=3,<4
+# Prefect 3 necesita un pydantic-settings más nuevo que el que fija
+# requirements.txt (2.7.1): sin esto, `import prefect` falla con
+# "No module named pydantic_settings.exceptions". El backend está probado con 2.15.
+pydantic-settings>=2.10

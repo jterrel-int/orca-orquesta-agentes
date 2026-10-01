@@ -10,46 +10,20 @@ export interface EventoAgente {
   artifacts?: string[];
 }
 
-export interface ResumenAgente {
-  agent: string;
-  status: EstadoAgente;
-  ultimo_msg: string;
-  duracion_s: number | null;
-}
-
-export interface ResumenCorrida {
-  run_id: string;
-  status: "running" | "done" | "error";
-  agentes: ResumenAgente[];
-  iniciado_en: string;
-  terminado_en: string | null;
-  /** Qué caso de uso lanzó esta corrida; null/ausente es el CRUD de Items. */
-  caso_de_uso?: string | null;
-}
-
-/** Espeja GET /api/casos-de-uso. */
-export interface CasoDeUso {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  icono: string;
-}
-
-export interface Item {
-  id: number;
-  name: string;
-  creado_en: string;
-}
-
 /** Espeja el cuerpo de GET /api/health. */
 export interface Salud {
   ok: boolean;
   brain: string;
-  /** "anthropic" | "scripted" — qué cerebro está activo ahora mismo. */
+  /** "anthropic" | "scripted" | "claude-cli" — qué cerebro está activo ahora mismo. */
   cerebro_activo: string;
   cerebro_modelo: string | null;
-  /** "guardada en Configuración" | "variable de entorno ANTHROPIC_API_KEY" | null. */
+  /**
+   * "guardada en Configuración" | "variable de entorno ANTHROPIC_API_KEY" |
+   * el comando del CLI (si cerebro_activo es "claude-cli") | null.
+   */
   cerebro_fuente: string | null;
+  /** Email logueado en el CLI, solo si cerebro_activo es "claude-cli"; si no, null. */
+  cerebro_cuenta: string | null;
   deploy_enabled: boolean;
   conexiones_ws: number;
   /** Configuración que arrancó igual pero probablemente no es la esperada. */
@@ -58,25 +32,25 @@ export interface Salud {
   origenes_permitidos: string[];
 }
 
+/**
+ * Contador local de tokens contra un límite que define el usuario — Anthropic
+ * no expone el gasto real de la cuenta a una API key normal, así que esto no
+ * es "cuánto llevás gastado en tu cuenta", sino un tope propio para saber
+ * cuándo frenar. Espeja GET/PUT /api/anthropic/uso.
+ */
+export interface UsoAnthropic {
+  limite_tokens: number;
+  tokens_usados: number;
+  porcentaje: number;
+}
+
 /** Espeja GET /api/anthropic/estado y la respuesta de POST /api/anthropic/conexion. */
 export interface EstadoAnthropic {
   conectado: boolean;
   modelo: string;
   /** Los últimos caracteres de la key, nunca la key completa. */
   clave?: string;
-}
-
-/** Los agentes que el dashboard muestra, en el orden del pipeline. */
-export const AGENTES = ["backend", "frontend", "deploy"] as const;
-
-export type LadoBacklog = "BE" | "FE" | "DE";
-
-/** Espeja una tarea parseada de docs/BACKLOG.md. */
-export interface TareaBacklog {
-  id: string;
-  titulo: string;
-  cuerpo: string;
-  lado: LadoBacklog;
+  uso: UsoAnthropic | null;
 }
 
 /** Espeja GET /api/vercel/estado. */
@@ -93,4 +67,176 @@ export interface EstadoRender {
   servicio_url?: string | null;
   servicio_suspendido?: string | null;
   advertencia?: string;
+}
+
+// --- fábrica de software (backend/app/api/fabrica.py) ---
+
+export type EstadoEspec =
+  | "pendiente"
+  | "esperando_aprobacion"
+  | "en_curso"
+  | "aprobada"
+  | "fallida"
+  | "bloqueada";
+
+export type EstadoEncargo =
+  | "especificando"
+  | "esperando_humano"
+  | "en_curso"
+  | "terminado"
+  | "fallido"
+  | "interrumpido";
+
+export interface Especificacion {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  criterios: string[];
+  archivos: string[];
+  depende_de: string[];
+  requiere_aprobacion: boolean;
+  e2e: boolean;
+  estado: EstadoEspec;
+  intentos: number;
+  motivo: string;
+  aprobada_por_humano: boolean;
+}
+
+export interface Pregunta {
+  id: string;
+  texto: string;
+  opciones: string[];
+  respuesta: string | null;
+  origen: "especificador" | "diagnosticador";
+  espec_id: string | null;
+  /** La solución que sugirió el Diagnosticador, si la hubo. */
+  propuesta?: string | null;
+}
+
+export interface Encargo {
+  id: string;
+  pedido: string;
+  estado: EstadoEncargo;
+  especificaciones: Especificacion[];
+  preguntas: Pregunta[];
+  costo_usd: number;
+  motivo: string;
+  url_despliegue: string | null;
+  creado_en: string;
+  actualizado_en: string;
+  corriendo: boolean;
+  /** Versionado: una iteración parte de los archivos de su padre. */
+  version: number;
+  padre_id: string | null;
+  raiz_id: string | null;
+  /** Id de la v1: agrupa todas las versiones de un mismo producto. */
+  linaje: string;
+  /** Si se archivó al reiniciar la línea. */
+  archivado_en: string | null;
+}
+
+export interface MetricaEtapa {
+  encargo_id: string;
+  etapa: string;
+  agente: string;
+  resultado: string;
+  duracion_s: number;
+  espec_id: string | null;
+  intento: number;
+  modelo: string;
+  tokens_entrada: number;
+  tokens_salida: number;
+  costo_usd: number | null;
+  ts: string;
+}
+
+export interface MetricasEncargo {
+  etapas: MetricaEtapa[];
+  costo_total_usd: number;
+  costo_completo: boolean;
+  duracion_total_s: number;
+  tokens_total: number;
+}
+
+export interface Integridad {
+  integra: boolean;
+  registros: number;
+  primer_registro_roto: number | null;
+}
+
+export interface RegistroBitacora {
+  secuencia: number;
+  encargo_id: string;
+  agente: string;
+  accion: string;
+  evidencia: Record<string, unknown>;
+  ts: string;
+  hash_previo: string;
+  hash: string;
+}
+
+export type NivelSalud = "ok" | "atencion" | "critico";
+
+export interface SaludFabrica {
+  signos: {
+    estado_general: NivelSalud;
+    encargos_total: number;
+    encargos_24h: number;
+    encargos_activos: number;
+    esperando_humano: number;
+    especificaciones_aprobadas: number;
+    especificaciones_fallidas: number;
+    tasa_aprobacion_primer_intento: number | null;
+    rechazos_por_causa: Record<string, number>;
+    costo_total_usd: number;
+    costo_promedio_encargo_usd: number | null;
+    duracion_media_por_etapa_s: Record<string, number>;
+    costo_por_etapa_usd: Record<string, number>;
+    bitacora_integra: boolean;
+    alertas: { nivel: NivelSalud; signo: string; mensaje: string }[];
+  };
+  velocidad: {
+    dia: string;
+    encargos: number;
+    especificaciones_aprobadas: number;
+    costo_usd: number;
+    duracion_total_s: number;
+  }[];
+  integridad: Integridad;
+}
+
+export interface ConfigFabrica {
+  paralelismo: number;
+  orquestador: "local" | "prefect";
+  prefect_ui_url: string | null;
+  aprobacion_humana: "nunca" | "ambiguedad" | "siempre";
+  max_intentos: number;
+  presupuesto_usd: number;
+  cache_llm: boolean;
+}
+
+/** Una ejecución: su carpeta en fabrica_espacios/ cruzada con su encargo. */
+export interface Ejecucion {
+  id: string;
+  en_base: boolean;
+  carpeta: boolean;
+  pedido: string | null;
+  estado: EstadoEncargo | null;
+  version: number;
+  padre_id: string | null;
+  raiz_id: string | null;
+  archivado_en: string | null;
+  creado_en: string | null;
+  costo_usd: number;
+  especificaciones: number;
+  aprobadas: number;
+  archivos: number;
+  bytes: number;
+  modificado_en: string | null;
+  corriendo: boolean;
+}
+
+export interface ArchivoEjecucion {
+  ruta: string;
+  bytes: number;
 }

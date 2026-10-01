@@ -463,3 +463,38 @@ Panel, confirmar que la tarjeta de Items se distingue visualmente (tamaño o
 jerarquía) de las 3 tarjetas de casos de demo, sin perder funcionalidad.
 
 **Depende de:** FE-06 (ya fusionada).
+
+## FE-11 — Especificación importada
+
+PROPUESTA COMERCIAL
+Contacto Web
+De prototipo a producción
+
+
+Preparado para Yanbal
+Preparado por Wirbi S.A.C.
+Modalidad Staffing por dedicación mensual · 4 perfiles · 6 meses
+Fecha  [completar]
+Av. Jorge Basadre Grohmann 607, San Isidro — Lima, Perú
+
+Entendimiento
+Yanbal cuenta con un prototipo funcional de Contacto Web que sirve de base para un producto en producción. Wirbi ha realizado un análisis previo sobre el prototipo, el Acuerdo de Requerimientos (AR v1.0 rev. 94) y la exportación de datos, generando de forma anticipada:
+Un diccionario de datos con tipos inferidos, claves candidatas y catálogos identificados.
+Un diseño preliminar de la capa de API, con su modelo de recursos y contrato de consulta.
+Un plan de ejecución por fases con sus dependencias y riesgos.
+
+Estructura comercial
+El proyecto se ejecuta íntegramente bajo modalidad Staffing: dedicación mensual por perfil, facturada según el porcentaje asignado cada mes. Esto aplica a todas las fases, incluido el Inicio.
+La curva de dedicación no es plana. El equipo arranca con dos perfiles y escala a cuatro luego de la fase de Inicio que estimamos en dos semanas; fase en la que se validará la información proveniente del AR para definir la arquitectura y el contrato de API.
+Equipo
+
+Sobre el nivel de seniority
+Los tres perfiles técnicos deben ser senior real. Entendemos que el prototipo desarrollado por Yanbal fue construido sobre la base de algunas iteraciones y algunas de sus reglas de negocio deben ser mejor definidas
+
+**Archivos:** por definir — tarea generada automáticamente a partir de un documento importado, sin revisión de un modelo de lenguaje real (no hay ANTHROPIC_API_KEY configurada). Revisar antes de asignar.
+
+**Verificación:** por definir.
+
+**Depende de:** nada.
+
+---

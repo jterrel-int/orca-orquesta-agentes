@@ -1,5 +1,6 @@
 """Configuración del proceso. Todo por variables de entorno, nada hardcodeado."""
 
+import importlib.util
 import shutil
 from pathlib import Path
 
@@ -20,40 +21,91 @@ class Config(BaseSettings):
 
     # --- despliegue ---
     # Apagado a propósito. Un agente que despliega a producción sin que un
-    # humano lo pida es un incidente esperando a ocurrir. Con esto en false el
-    # DeployAgent registra el comando exacto que ejecutaría y termina en 'done'.
+    # humano lo pida es un incidente esperando a ocurrir. Con esto en false la
+    # etapa de Despliegue de la fábrica informa los comandos exactos que
+    # correría (git + gh) y no publica nada.
     deploy_enabled: bool = False
+    # Token de Vercel por variable de entorno; alternativa a conectar la
+    # cuenta desde Configuración.
     vercel_token: str | None = None
-    vercel_cwd: str = str(RAIZ_PROYECTO / "frontend")
-    deploy_timeout_s: int = 600
 
     # --- cerebro de los agentes ---
     # 'scripted' usa pasos deterministas (por defecto, no necesita clave).
     # 'anthropic' usa la API real; requiere anthropic_api_key.
+    # 'claude-cli' delega en el CLI de Claude Code ya logueado en esta máquina
+    # (`claude -p`) en vez de una API key propia — sirve para desarrollo local
+    # sin gastar saldo de la API, pero no funciona en un backend desplegado
+    # (Render, etc.) porque ahí no hay ninguna sesión de Claude Code logueada.
     brain: str = "scripted"
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-4-6"
+    claude_cli_comando: str = "claude"
+    # Una especificación grande (varios archivos) puede tardar más de 2 minutos
+    # en claude-cli; si no alcanza, el Implementador queda con la plantilla.
+    claude_cli_timeout_s: float = 300.0
+    # 'openai-compatible': cualquier API con el formato de chat completions de
+    # OpenAI. Por defecto apunta a DeepSeek — modelos más baratos para etapas
+    # bien acotadas. El costo se calcula con TARIFAS_EXTRA (ver tarifas.py).
+    openai_compat_api_key: str | None = None
+    openai_compat_base_url: str = "https://api.deepseek.com"
+    openai_compat_modelo: str = "deepseek-chat"
+    # JSON {modelo: [USD por millón de entrada, USD por millón de salida]}
+    # para modelos fuera de la tabla de Claude, p. ej. '{"deepseek-chat": [0.27, 1.1]}'.
+    tarifas_extra: str = ""
 
-    # --- rutas de generación ---
-    dir_generado_backend: str = str(RAIZ_BACKEND / "app" / "generated")
-    dir_generado_frontend: str = str(RAIZ_PROYECTO / "frontend" / "app" / "items")
-    # Raíz para los casos de uso nuevos (calculadora, leads, encuesta): cada uno
-    # escribe su componente bajo dir_generado_frontend_casos/<caso>/. "items"
-    # sigue usando dir_generado_frontend de arriba, sin cambios.
-    dir_generado_frontend_casos: str = str(RAIZ_PROYECTO / "frontend" / "app" / "casos")
-
-    # --- ritmo de la demo ---
-    # Duración de cada sub-paso adicional que loguean BackendAgent/FrontendAgent
-    # para los casos de uso nuevos (calculadora, leads, encuesta) — "items" no
-    # los usa y no cambia su timing. El default de acá es el de producción:
-    # apunta a que una corrida completa de un caso nuevo se sienta como una
-    # demo real (~4-6 minutos). Los tests que ejercitan estos agentes
-    # directamente bajan este valor con monkeypatch antes de correr, así la
-    # suite no se vuelve lenta.
-    duracion_paso_demo_s: float = 40.0
-
-    # --- backlog ---
-    ruta_backlog: str = str(RAIZ_PROYECTO / "docs" / "BACKLOG.md")
+    # --- fábrica de software (orchestrator/lider.py) ---
+    # Modelo por rol. Vacío = el del proveedor activo (anthropic_model u
+    # openai_compat_modelo). Bajar el especificador/revisor/diagnosticador a
+    # un modelo más barato es la palanca de costo más directa: el harness
+    # valida su trabajo igual.
+    fabrica_modelo_especificador: str = ""
+    fabrica_modelo_implementador: str = ""
+    fabrica_modelo_revisor: str = ""
+    fabrica_modelo_diagnosticador: str = ""
+    fabrica_dir_espacios: str = str(RAIZ_PROYECTO / "fabrica_espacios")
+    fabrica_max_intentos: int = 2
+    # Tope de gasto por encargo en USD; 0 lo desactiva.
+    fabrica_presupuesto_usd: float = 1.0
+    # 'ambiguedad': pregunta solo cuando el Especificador detecta un conflicto
+    # (p. ej. una tabla legada) o una especificación riesgosa. 'nunca' toma la
+    # primera opción de cada pregunta y lo deja en la bitácora. 'siempre'
+    # pide aprobación humana para cada especificación.
+    fabrica_aprobacion_humana: str = "ambiguedad"
+    # Dónde corre el código generado para verificarlo: 'local' (subproceso,
+    # sin claves en el entorno) o 'docker' (contenedor sin red). Con un
+    # cerebro real, 'docker' es lo recomendable — ver advertencias().
+    fabrica_sandbox: str = "local"
+    fabrica_imagen_sandbox: str = "orquesta-sandbox:latest"
+    fabrica_timeout_pruebas_s: float = 120.0
+    # Pruebas funcionales con Playwright en un contenedor con Chromium.
+    # Apagado por defecto: requiere Docker y una URL donde corra la app.
+    fabrica_e2e_enabled: bool = False
+    fabrica_imagen_e2e: str = "mcr.microsoft.com/playwright:v1.55.0-noble"
+    fabrica_e2e_url_base: str = "http://host.docker.internal:3000"
+    # Despliegue de un encargo vía GitHub (PR + GitHub Actions). Solo si
+    # DEPLOY_ENABLED=true; si no, se informa qué se correría.
+    github_repo: str | None = None
+    github_rama_base: str = "main"
+    # Caché de respuestas del LLM (ver adaptadores/cache_llm.py). Apagada por
+    # defecto: fija la primera respuesta de cada prompt idéntico — más barato y
+    # reproducible, pero deja de muestrear respuestas nuevas en un reintento.
+    fabrica_cache_llm: bool = False
+    # Plugins de ciclo de vida del Líder (ver orchestrator/plugins.py). Los
+    # archivos que empiezan con "_" no se cargan.
+    fabrica_dir_plugins: str = str(RAIZ_BACKEND / "plugins")
+    # Tope de caracteres del contexto que se manda al cerebro en cada etapa.
+    # Por encima, se compacta de forma determinista (ver agents/fabrica/comun.py).
+    fabrica_limite_contexto: int = 60000
+    # Cuántas especificaciones de un mismo nivel de dependencias se
+    # construyen a la vez dentro de un encargo.
+    fabrica_paralelismo: int = 3
+    # 'local' (asyncio, por defecto) o 'prefect': cada encargo se registra
+    # como flow run y cada etapa como task run en la UI de Prefect. Requiere
+    # `pip install -r requirements-prefect.txt`. Prefect observa; el Líder
+    # sigue decidiendo (ver orchestrator/prefect_opcional.py).
+    fabrica_orquestador: str = "local"
+    # Para enlazar desde el panel a la UI de Prefect.
+    prefect_ui_url: str = "http://127.0.0.1:4200"
 
     # --- integración OAuth con Vercel ---
     # Se registra a mano en vercel.com/dashboard → Integrations Console. Sin
@@ -85,15 +137,39 @@ class Config(BaseSettings):
                 "BRAIN=anthropic pero falta ANTHROPIC_API_KEY; se está usando el cerebro guionado"
             )
 
-        if self.deploy_enabled and shutil.which("vercel") is None:
+        if self.brain == "claude-cli" and shutil.which(self.claude_cli_comando) is None:
+            avisos.append(f"BRAIN=claude-cli pero '{self.claude_cli_comando}' no está en el PATH")
+
+        if self.brain == "openai-compatible" and not self.openai_compat_api_key:
             avisos.append(
-                "DEPLOY_ENABLED=true pero el CLI de Vercel no está instalado o no está en el PATH"
+                "BRAIN=openai-compatible pero falta OPENAI_COMPAT_API_KEY; "
+                "se está usando el cerebro guionado"
             )
 
-        if self.deploy_enabled and not Path(self.vercel_cwd).is_dir():
+        if self.brain != "scripted" and self.fabrica_sandbox == "local":
             avisos.append(
-                f"DEPLOY_ENABLED=true pero el directorio del frontend no existe: {self.vercel_cwd}"
+                "La fábrica verifica código generado por un LLM en un subproceso local; "
+                "FABRICA_SANDBOX=docker lo aísla en un contenedor sin red"
             )
+
+        if self.fabrica_aprobacion_humana not in ("nunca", "ambiguedad", "siempre"):
+            avisos.append(
+                f"FABRICA_APROBACION_HUMANA='{self.fabrica_aprobacion_humana}' no es válido; "
+                "se usa 'ambiguedad'"
+            )
+
+        if self.fabrica_orquestador == "prefect" and importlib.util.find_spec("prefect") is None:
+            avisos.append(
+                "FABRICA_ORQUESTADOR=prefect pero Prefect no está instalado "
+                "(pip install -r requirements-prefect.txt); la fábrica corre sin él"
+            )
+
+        if self.deploy_enabled and not self.github_repo:
+            avisos.append("DEPLOY_ENABLED=true pero falta GITHUB_REPO (dueño/repositorio)")
+
+        for ejecutable in ("git", "gh"):
+            if self.deploy_enabled and shutil.which(ejecutable) is None:
+                avisos.append(f"DEPLOY_ENABLED=true pero '{ejecutable}' no está en el PATH")
 
         return avisos
 

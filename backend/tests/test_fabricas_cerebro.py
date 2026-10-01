@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from app.adaptadores.cerebro_anthropic import CerebroAnthropic
+from app.adaptadores.cerebro_claude_cli import CerebroClaudeCLI
 from app.adaptadores.cerebro_guionado import CerebroGuionado
 from app.adaptadores.fabricas import construir_cerebro, estado_cerebro
 from app.config import config
@@ -33,6 +34,10 @@ class _CredencialesFalsas:
 async def test_sin_credencial_guardada_ni_env_cae_a_guionado(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # BRAIN se fija explícitamente: estos tests verifican la resolución de la
+    # API key de Anthropic, no lo que haya en el .env real de quien los corre
+    # (que puede tener BRAIN=claude-cli, como en desarrollo local).
+    monkeypatch.setattr(config, "brain", "scripted")
     monkeypatch.setattr(config, "anthropic_api_key", None)
 
     cerebro = await construir_cerebro(_CredencialesFalsas())
@@ -44,6 +49,7 @@ async def test_sin_credencial_guardada_ni_env_cae_a_guionado(
 async def test_usa_la_variable_de_entorno_si_no_hay_credencial_guardada(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(config, "brain", "anthropic")
     monkeypatch.setattr(config, "anthropic_api_key", "sk-ant-del-env")
 
     cerebro = await construir_cerebro(_CredencialesFalsas())
@@ -57,6 +63,7 @@ async def test_usa_la_variable_de_entorno_si_no_hay_credencial_guardada(
 async def test_credencial_guardada_tiene_prioridad_sobre_la_variable_de_entorno(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(config, "brain", "anthropic")
     monkeypatch.setattr(config, "anthropic_api_key", "sk-ant-del-env")
     credenciales = _CredencialesFalsas(CredencialAnthropic(api_key="sk-ant-guardada"))
 
@@ -68,8 +75,35 @@ async def test_credencial_guardada_tiene_prioridad_sobre_la_variable_de_entorno(
 
 
 async def test_estado_nunca_expone_la_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "brain", "anthropic")
     credenciales = _CredencialesFalsas(CredencialAnthropic(api_key="sk-ant-secreta-de-verdad"))
 
     estado = await estado_cerebro(credenciales)
 
     assert "sk-ant-secreta-de-verdad" not in str(estado)
+
+
+async def test_brain_claude_cli_no_pasa_por_ninguna_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config, "brain", "claude-cli")
+    monkeypatch.setattr(config, "anthropic_api_key", "sk-ant-del-env")
+    credenciales = _CredencialesFalsas(CredencialAnthropic(api_key="sk-ant-guardada"))
+
+    async def _cuenta_falsa(comando: str) -> str:
+        return "vos@ejemplo.com"
+
+    import app.adaptadores.fabricas as fabricas
+
+    monkeypatch.setattr(fabricas, "cuenta_claude_cli", _cuenta_falsa)
+
+    cerebro = await construir_cerebro(credenciales)
+
+    assert isinstance(cerebro, CerebroClaudeCLI)
+    estado = await estado_cerebro(credenciales)
+    assert estado == {
+        "activo": "claude-cli",
+        "modelo": None,
+        "fuente": config.claude_cli_comando,
+        "cuenta": "vos@ejemplo.com",
+    }

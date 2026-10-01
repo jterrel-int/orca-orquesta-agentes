@@ -9,18 +9,8 @@ class ErrorDominio(Exception):
     """Base de las excepciones de dominio."""
 
 
-class ItemNoEncontrado(ErrorDominio):
-    def __init__(self, item_id: int) -> None:
-        super().__init__(f"Item {item_id} no encontrado")
-        self.item_id = item_id
-
-
 class DespliegueFallido(ErrorDominio):
     """El Desplegador no pudo completar el despliegue."""
-
-
-class CorridaEnCurso(ErrorDominio):
-    """Ya hay una corrida de agentes en curso; no se puede lanzar otra."""
 
 
 class OAuthFallido(ErrorDominio):
@@ -34,4 +24,17 @@ class CredencialInvalida(ErrorDominio):
 class DocumentoNoLegible(ErrorDominio):
     """El documento importado no tiene texto extraíble (formato no soportado,
     o un PDF/imagen escaneada sin capa de texto).
+    """
+
+
+class EncargoNoEncontrado(ErrorDominio):
+    def __init__(self, encargo_id: str) -> None:
+        super().__init__(f"Encargo {encargo_id} no encontrado")
+        self.encargo_id = encargo_id
+
+
+class AccionNoPermitida(ErrorDominio):
+    """La acción humana pedida no corresponde al estado actual del encargo
+    (responder una pregunta ya respondida, aprobar algo que no espera
+    aprobación, reanudar algo que ya corre).
     """

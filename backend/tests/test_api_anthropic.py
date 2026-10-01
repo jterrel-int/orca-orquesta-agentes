@@ -94,3 +94,46 @@ async def test_desconectar_borra_la_credencial(
 
     estado = (await cliente.get("/api/anthropic/estado")).json()
     assert estado["conectado"] is False
+
+
+# --- uso: contador local de tokens contra un límite que define el usuario ---
+
+
+async def test_uso_es_null_sin_limite_configurado(cliente: httpx.AsyncClient) -> None:
+    r = await cliente.get("/api/anthropic/uso")
+    assert r.status_code == 200
+    assert r.json() is None
+
+    estado = (await cliente.get("/api/anthropic/estado")).json()
+    assert estado["uso"] is None
+
+
+async def test_establecer_limite_de_uso(cliente: httpx.AsyncClient) -> None:
+    r = await cliente.put("/api/anthropic/uso", json={"limite_tokens": 1000})
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert cuerpo == {"limite_tokens": 1000, "tokens_usados": 0, "porcentaje": 0.0}
+
+    r = await cliente.get("/api/anthropic/uso")
+    assert r.json() == cuerpo
+
+
+async def test_establecer_limite_invalido_da_422(cliente: httpx.AsyncClient) -> None:
+    r = await cliente.put("/api/anthropic/uso", json={"limite_tokens": 0})
+    assert r.status_code == 422
+
+
+async def test_conexion_y_estado_incluyen_el_uso_configurado(
+    cliente: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _ok(api_key: str, modelo: str) -> None:
+        return None
+
+    monkeypatch.setattr(api_anthropic, "verificar_api_key", _ok)
+    await cliente.put("/api/anthropic/uso", json={"limite_tokens": 200})
+
+    r = await cliente.post("/api/anthropic/conexion", json={"api_key": "sk-ant-0123456789abcd"})
+    assert r.json()["uso"] == {"limite_tokens": 200, "tokens_usados": 0, "porcentaje": 0.0}
+
+    estado = (await cliente.get("/api/anthropic/estado")).json()
+    assert estado["uso"] == {"limite_tokens": 200, "tokens_usados": 0, "porcentaje": 0.0}

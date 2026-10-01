@@ -1,8 +1,9 @@
 """Extrae texto plano de specs subidas (.txt, .md, .pdf, .docx).
 
-Así el dominio (`ServicioBacklog.generar_desde_especificacion`) trabaja
-siempre con texto, nunca con bytes ni formatos de archivo — el mismo
-principio que `backlog_markdown.py` aplica para docs/BACKLOG.md.
+La fábrica recibe siempre un pedido en texto; esto permite que ese pedido
+venga de un documento (POST /api/fabrica/importar). Las viñetas de Word se
+convierten en líneas "- …", que el Especificador usa para partir el pedido
+en especificaciones.
 """
 
 from __future__ import annotations
@@ -64,11 +65,9 @@ _PATRON_NIVEL_ENCABEZADO = re.compile(r"heading\s*(\d)", re.IGNORECASE)
 
 def _extraer_docx(contenido: bytes) -> str:
     """Reconstruye encabezados markdown a partir de los estilos "Heading N"/
-    "Title" de Word, y viñetas a partir de "List Bullet"/"List Number" — sin
-    esto, el desglose por encabezados que hace `dominio.servicios` no puede
-    distinguir un título de un párrafo cualquiera, porque un .docx no usa
-    "#" para nada: la jerarquía vive en el estilo del párrafo, que se pierde
-    si solo se junta `parrafo.text`.
+    "Title" de Word, y viñetas a partir de "List Bullet"/"List Number". Un
+    .docx no usa "#" ni "-": la jerarquía vive en el estilo del párrafo, que
+    se pierde si solo se junta `parrafo.text`.
     """
     documento = Document(io.BytesIO(contenido))
     lineas: list[str] = []

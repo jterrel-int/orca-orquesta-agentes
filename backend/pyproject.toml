@@ -5,12 +5,6 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
-[tool.ruff.lint.per-file-ignores]
-"app/agents/plantillas.py" = ["E501"]
-"app/agents/plantillas_calculadora.py" = ["E501"]
-"app/agents/plantillas_leads.py" = ["E501"]
-"app/agents/plantillas_encuesta.py" = ["E501"]
-
 # `Depends(...)`/`File(...)`/`Form(...)` como valor por defecto es el idiom de
 # FastAPI, no una llamada accidental: cada una devuelve un centinela que
 # FastAPI resuelve por request.
@@ -33,3 +27,9 @@ check_untyped_defs = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+# Prefect es opcional (requirements-prefect.txt): sin instalar, mypy no ve sus
+# tipos. Ver app/orchestrator/prefect_opcional.py.
+[[tool.mypy.overrides]]
+module = ["prefect", "prefect.*"]
+ignore_missing_imports = true

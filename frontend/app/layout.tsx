@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Sidebar from "@/components/Sidebar";
+import ToastUsoAnthropic from "@/components/ToastUsoAnthropic";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Orquesta — panel de agentes",
-  description: "Ejecución de agentes en vivo: genera, ejecuta y despliega.",
+  title: "Orquesta — fábrica de software",
+  description:
+    "Fábrica de software agéntica: del pedido a la especificación, el código probado y el despliegue.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -29,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Sidebar />
           <div className="app-main">{children}</div>
         </div>
+        <ToastUsoAnthropic />
       </body>
     </html>
   );

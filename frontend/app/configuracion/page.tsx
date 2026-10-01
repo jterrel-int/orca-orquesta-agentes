@@ -52,6 +52,19 @@ export default function PaginaConfiguracion() {
                       Anthropic — modelo <span className="mono">{estado.cerebro_modelo}</span> (
                       {estado.cerebro_fuente})
                     </>
+                  ) : estado.cerebro_activo === "claude-cli" ? (
+                    <>
+                      Claude Code CLI local (<span className="mono">{estado.cerebro_fuente}</span>
+                      ) — usa la sesión de esta máquina, no una API key. Solo funciona acá, no en
+                      un backend desplegado.
+                      <br />
+                      Cuenta que va a gastar las corridas:{" "}
+                      {estado.cerebro_cuenta ? (
+                        <span className="mono">{estado.cerebro_cuenta}</span>
+                      ) : (
+                        "no se pudo determinar (¿claude auth status funciona en esta terminal?)"
+                      )}
+                    </>
                   ) : (
                     "Guionado (determinista, sin IA real — conectá Anthropic abajo)"
                   )}

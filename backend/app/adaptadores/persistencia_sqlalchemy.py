@@ -1,7 +1,9 @@
 """Adaptador de persistencia: SQLAlchemy async sobre SQLite (aiosqlite).
 
-Implementa el puerto RepositorioItems. Nadie fuera de este módulo conoce
-SQLAlchemy ni la fila ORM; el resto de la app trabaja con dominio.modelos.Item.
+Base declarativa, motor y sesiones compartidas, más las credenciales y el
+contador de uso de Configuración. Las tablas de la fábrica (encargos,
+bitácora, métricas, caché del LLM) viven en persistencia_fabrica.py y
+cache_llm.py sobre esta misma Base.
 """
 
 from __future__ import annotations
@@ -9,12 +11,17 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Integer, String, select
+from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from ..config import config
-from ..dominio.modelos import CredencialAnthropic, CredencialRender, CredencialVercel, Item
+from ..dominio.modelos import (
+    CredencialAnthropic,
+    CredencialRender,
+    CredencialVercel,
+    UsoAnthropic,
+)
 
 
 class Base(DeclarativeBase):
@@ -23,17 +30,6 @@ class Base(DeclarativeBase):
 
 def _ahora() -> datetime:
     return datetime.now(UTC)
-
-
-class ItemORM(Base):
-    __tablename__ = "items"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora)
-
-    def a_dominio(self) -> Item:
-        return Item(id=self.id, name=self.name, creado_en=self.creado_en)
 
 
 class CredencialVercelORM(Base):
@@ -80,6 +76,26 @@ class CredencialAnthropicORM(Base):
         return CredencialAnthropic(api_key=self.api_key, creado_en=self.creado_en)
 
 
+class UsoAnthropicORM(Base):
+    """Una sola fila (id=1): contador global de tokens usados en este proceso
+    contra el límite local que fijó el usuario (ver dominio.modelos.UsoAnthropic).
+    """
+
+    __tablename__ = "uso_anthropic"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    limite_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tokens_usados: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora)
+
+    def a_dominio(self) -> UsoAnthropic:
+        return UsoAnthropic(
+            limite_tokens=self.limite_tokens,
+            tokens_usados=self.tokens_usados,
+            actualizado_en=self.actualizado_en,
+        )
+
+
 motor = create_async_engine(config.database_url, echo=False, future=True)
 
 FabricaSesion = async_sessionmaker(motor, class_=AsyncSession, expire_on_commit=False)
@@ -87,8 +103,15 @@ FabricaSesion = async_sessionmaker(motor, class_=AsyncSession, expire_on_commit=
 
 async def crear_tablas() -> None:
     """Crea el esquema si no existe. Para un MVP alcanza; en producción, migraciones."""
+    # Import tardío: persistencia_fabrica importa Base de este módulo. Además
+    # de evitar el ciclo, garantiza que sus tablas estén registradas en
+    # Base.metadata antes del create_all.
+    from . import cache_llm  # noqa: F401 — registra su tabla en Base.metadata
+    from .persistencia_fabrica import proteger_bitacora
+
     async with motor.begin() as conexion:
         await conexion.run_sync(Base.metadata.create_all)
+        await proteger_bitacora(conexion)
 
 
 async def obtener_sesion() -> AsyncIterator[AsyncSession]:
@@ -97,47 +120,8 @@ async def obtener_sesion() -> AsyncIterator[AsyncSession]:
         yield sesion
 
 
-class RepositorioItemsSQLAlchemy:
-    """Implementa dominio.puertos.RepositorioItems contra SQLite."""
-
-    def __init__(self, sesion: AsyncSession) -> None:
-        self._sesion = sesion
-
-    async def listar(self) -> list[Item]:
-        resultado = await self._sesion.execute(select(ItemORM).order_by(ItemORM.id.desc()))
-        return [fila.a_dominio() for fila in resultado.scalars().all()]
-
-    async def crear(self, name: str) -> Item:
-        fila = ItemORM(name=name)
-        self._sesion.add(fila)
-        await self._sesion.commit()
-        await self._sesion.refresh(fila)
-        return fila.a_dominio()
-
-    async def obtener(self, item_id: int) -> Item | None:
-        fila = await self._sesion.get(ItemORM, item_id)
-        return fila.a_dominio() if fila else None
-
-    async def actualizar(self, item_id: int, name: str) -> Item | None:
-        fila = await self._sesion.get(ItemORM, item_id)
-        if fila is None:
-            return None
-        fila.name = name
-        await self._sesion.commit()
-        await self._sesion.refresh(fila)
-        return fila.a_dominio()
-
-    async def eliminar(self, item_id: int) -> bool:
-        fila = await self._sesion.get(ItemORM, item_id)
-        if fila is None:
-            return False
-        await self._sesion.delete(fila)
-        await self._sesion.commit()
-        return True
-
-
 class RepositorioCredencialVercelSQLAlchemy:
-    """Implementa dominio.puertos.RepositorioCredencialVercel."""
+    """Token OAuth de Vercel guardado desde Configuración."""
 
     def __init__(self, sesion: AsyncSession) -> None:
         self._sesion = sesion
@@ -212,3 +196,37 @@ class RepositorioCredencialAnthropicSQLAlchemy:
         if fila:
             await self._sesion.delete(fila)
             await self._sesion.commit()
+
+
+class RepositorioUsoAnthropicSQLAlchemy:
+    """Implementa dominio.puertos.RepositorioUsoAnthropic."""
+
+    def __init__(self, sesion: AsyncSession) -> None:
+        self._sesion = sesion
+
+    async def obtener(self) -> UsoAnthropic | None:
+        fila = await self._sesion.get(UsoAnthropicORM, 1)
+        return fila.a_dominio() if fila else None
+
+    async def establecer_limite(self, limite_tokens: int) -> UsoAnthropic:
+        fila = await self._sesion.get(UsoAnthropicORM, 1)
+        if fila is None:
+            fila = UsoAnthropicORM(id=1, limite_tokens=limite_tokens, tokens_usados=0)
+            self._sesion.add(fila)
+        else:
+            fila.limite_tokens = limite_tokens
+        fila.actualizado_en = _ahora()
+        await self._sesion.commit()
+        await self._sesion.refresh(fila)
+        return fila.a_dominio()
+
+    async def sumar_tokens(self, tokens: int) -> UsoAnthropic:
+        fila = await self._sesion.get(UsoAnthropicORM, 1)
+        if fila is None:
+            fila = UsoAnthropicORM(id=1, limite_tokens=0, tokens_usados=0)
+            self._sesion.add(fila)
+        fila.tokens_usados += tokens
+        fila.actualizado_en = _ahora()
+        await self._sesion.commit()
+        await self._sesion.refresh(fila)
+        return fila.a_dominio()

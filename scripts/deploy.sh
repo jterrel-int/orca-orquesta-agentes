@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Despliegue manual a Vercel. Deliberadamente separado de los agentes.
-#
-# El DeployAgent puede hacer esto mismo con DEPLOY_ENABLED=true, pero por
-# defecto está apagado: un agente que despliega a producción sin que una
+# Despliegue manual del frontend de Orquesta a Vercel. Deliberadamente
+# separado de los agentes: un agente que despliega a producción sin que una
 # persona lo pida es un incidente esperando a ocurrir.
 set -euo pipefail
 

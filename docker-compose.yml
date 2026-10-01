@@ -7,14 +7,14 @@ services:
     environment:
       BRAIN: ${BRAIN:-scripted}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      # El despliegue queda fuera del contenedor a propósito: el CLI de Vercel
-      # necesita tu sesión local. Corre ./scripts/deploy.sh en el anfitrión.
+      # Apagado a propósito: la etapa de Despliegue de la fábrica solo informa
+      # los comandos git/gh que correría.
       DEPLOY_ENABLED: "false"
       ORIGENES_PERMITIDOS: http://localhost:3000
+      FABRICA_DIR_ESPACIOS: /fabrica_espacios
     volumes:
-      # El código generado por los agentes queda visible en el anfitrión.
-      - ./backend/app/generated:/app/app/generated
-      - ./frontend/app/items:/generated-frontend
+      # Lo que construye cada encargo queda visible en el anfitrión.
+      - ./fabrica_espacios:/fabrica_espacios
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 10s

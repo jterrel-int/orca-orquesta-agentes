@@ -19,13 +19,6 @@ def _ahora_iso() -> str:
 
 
 @dataclass
-class Item:
-    id: int | None
-    name: str
-    creado_en: datetime | None = None
-
-
-@dataclass
 class EventoAgente:
     """Contrato congelado del WebSocket: {agent, status, msg} más metadatos opcionales."""
 
@@ -35,40 +28,6 @@ class EventoAgente:
     ts: str = field(default_factory=_ahora_iso)
     run_id: str | None = None
     artifacts: list[str] = field(default_factory=list)
-
-
-@dataclass
-class EstadoAgente:
-    """Estado consolidado de un agente dentro de una corrida."""
-
-    agent: str
-    status: Estado = "pending"
-    ultimo_msg: str = ""
-    duracion_s: float | None = None
-
-
-@dataclass
-class ResumenCorrida:
-    run_id: str
-    status: Literal["running", "done", "error"]
-    agentes: list[EstadoAgente]
-    iniciado_en: str
-    terminado_en: str | None = None
-    # Qué caso de uso pidió esta corrida (ver app.agents.casos_de_uso). None es
-    # el caso "items" histórico. No es el contrato congelado del WebSocket
-    # (EventoAgente) — ese no se toca.
-    caso_de_uso: str | None = None
-
-
-Lado = Literal["BE", "FE", "DE"]
-
-
-@dataclass
-class TareaBacklog:
-    id: str
-    titulo: str
-    cuerpo: str
-    lado: Lado
 
 
 @dataclass
@@ -98,3 +57,22 @@ class CredencialAnthropic:
 
     api_key: str
     creado_en: datetime | None = None
+
+
+@dataclass
+class UsoAnthropic:
+    """Contador local de tokens consumidos por Orquesta contra un límite que
+    define quien lo usa. Anthropic no expone el gasto ni el cupo real de una
+    cuenta a través de una API key normal (eso requiere una Admin API key y
+    sigue sin dar un "% de plan"), así que este límite no viene de la cuenta:
+    lo fija el usuario acá para saber cuándo frenar.
+    """
+
+    limite_tokens: int
+    tokens_usados: int = 0
+    actualizado_en: datetime | None = None
+
+    def porcentaje(self) -> float:
+        if self.limite_tokens <= 0:
+            return 0.0
+        return min(100.0, (self.tokens_usados / self.limite_tokens) * 100)

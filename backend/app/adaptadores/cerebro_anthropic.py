@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 
 import httpx
 
+from ..dominio.fabrica import Consumo, RespuestaMedida
+from .tarifas import costo_usd
+
 log = logging.getLogger(__name__)
+
+RegistradorDeUso = Callable[[int], Awaitable[None]]
 
 
 class CerebroAnthropic:
@@ -17,11 +23,22 @@ class CerebroAnthropic:
     nombre = "anthropic"
     URL = "https://api.anthropic.com/v1/messages"
 
-    def __init__(self, api_key: str, modelo: str) -> None:
+    def __init__(
+        self, api_key: str, modelo: str, registrar_uso: RegistradorDeUso | None = None
+    ) -> None:
         self._api_key = api_key
         self._modelo = modelo
+        # Anthropic no expone el gasto de la cuenta a una API key normal; este
+        # callback es cómo Orquesta lleva su propio contador de tokens (ver
+        # dominio.modelos.UsoAnthropic) sin que este adaptador conozca SQLAlchemy.
+        self._registrar_uso = registrar_uso
 
     async def pensar(self, instruccion: str, contexto: str = "", *, respaldo: str = "") -> str:
+        return (await self.pensar_medido(instruccion, contexto, respaldo=respaldo)).texto
+
+    async def pensar_medido(
+        self, instruccion: str, contexto: str = "", *, respaldo: str = ""
+    ) -> RespuestaMedida:
         cuerpo = {
             "model": self._modelo,
             "max_tokens": 2000,
@@ -46,7 +63,17 @@ class CerebroAnthropic:
                 b.get("text", "") for b in datos.get("content", []) if b.get("type") == "text"
             ]
             texto = "\n".join(p for p in partes if p).strip()
-            return texto or respaldo
+
+            uso = datos.get("usage") or {}
+            entrada = int(uso.get("input_tokens", 0))
+            salida = int(uso.get("output_tokens", 0))
+            if self._registrar_uso is not None and (entrada + salida):
+                await self._registrar_uso(entrada + salida)
+
+            # Se cobra el modelo que respondió, no el que se pidió.
+            modelo = str(datos.get("model") or self._modelo)
+            consumo = Consumo(modelo, entrada, salida, costo_usd(modelo, entrada, salida))
+            return RespuestaMedida(texto or respaldo, consumo)
         except Exception as e:  # noqa: BLE001
             log.warning("Cerebro Anthropic falló (%s); se usa el respaldo", e)
-            return respaldo
+            return RespuestaMedida(respaldo, Consumo(self._modelo))

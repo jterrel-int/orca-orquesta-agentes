@@ -1,13 +1,17 @@
 import type {
-  CasoDeUso,
+  ArchivoEjecucion,
+  Ejecucion,
+  ConfigFabrica,
+  Encargo,
   EstadoAnthropic,
   EstadoRender,
   EstadoVercel,
-  Item,
-  LadoBacklog,
-  ResumenCorrida,
+  Integridad,
+  MetricasEncargo,
+  RegistroBitacora,
   Salud,
-  TareaBacklog,
+  SaludFabrica,
+  UsoAnthropic,
 } from "./types";
 
 export const API =
@@ -26,66 +30,7 @@ async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
-// --- corridas de agentes ---
-
-/** `casoDeUso` ausente/null lanza el comportamiento histórico (CRUD de Items). */
-export const lanzarCorrida = (casoDeUso?: string | null) =>
-  pedir<{ status: string; detalle: string }>("/api/run", {
-    method: "POST",
-    body: JSON.stringify({ caso_de_uso: casoDeUso ?? null }),
-  });
-
-export const estadoCorrida = () => pedir<ResumenCorrida | null>("/api/run/status");
-
-export const casosDeUso = () => pedir<CasoDeUso[]>("/api/casos-de-uso");
-
 export const salud = () => pedir<Salud>("/api/health");
-
-// --- CRUD de items ---
-
-export const listarItems = () => pedir<Item[]>("/api/items");
-
-export const crearItem = (name: string) =>
-  pedir<Item>("/api/items", { method: "POST", body: JSON.stringify({ name }) });
-
-export const eliminarItem = (id: number) =>
-  pedir<void>(`/api/items/${id}`, { method: "DELETE" });
-
-// --- backlog ---
-
-export const listarBacklog = () => pedir<TareaBacklog[]>("/api/backlog");
-
-export const agregarTareaBacklog = (datos: {
-  titulo: string;
-  cuerpo: string;
-  lado: LadoBacklog;
-}) => pedir<TareaBacklog>("/api/backlog", { method: "POST", body: JSON.stringify(datos) });
-
-export type AlcanceGeneracion = "BE" | "FE" | "todo";
-
-/**
- * Sube un documento de especificación (o pega texto) y devuelve las tareas
- * que el backend generó y ya agregó a docs/BACKLOG.md. Es multipart, no
- * JSON, así que no pasa por `pedir` — el navegador arma el boundary solo si
- * no le fijamos un Content-Type nosotros.
- */
-export async function generarTareasDesdeEspecificacion(datos: {
-  alcance: AlcanceGeneracion;
-  archivo?: File | null;
-  texto?: string;
-}): Promise<TareaBacklog[]> {
-  const cuerpo = new FormData();
-  cuerpo.set("alcance", datos.alcance);
-  if (datos.archivo) cuerpo.set("archivo", datos.archivo);
-  if (datos.texto) cuerpo.set("texto", datos.texto);
-
-  const res = await fetch(`${API}/api/backlog/generar`, { method: "POST", body: cuerpo });
-  if (!res.ok) {
-    const detalle = await res.json().catch(() => null);
-    throw new Error(detalle?.detail ?? `${res.status} ${res.statusText}`);
-  }
-  return (await res.json()) as TareaBacklog[];
-}
 
 // --- conexión con Vercel (OAuth) ---
 
@@ -121,4 +66,100 @@ export const conectarAnthropic = (apiKey: string) =>
 export const desconectarAnthropic = () =>
   pedir<void>("/api/anthropic/conexion", { method: "DELETE" });
 
-export type { Item };
+/** Contador local de tokens contra un límite propio — no el gasto real de la cuenta. */
+export const usoAnthropic = () => pedir<UsoAnthropic | null>("/api/anthropic/uso");
+
+export const establecerLimiteAnthropic = (limiteTokens: number) =>
+  pedir<UsoAnthropic>("/api/anthropic/uso", {
+    method: "PUT",
+    body: JSON.stringify({ limite_tokens: limiteTokens }),
+  });
+
+// --- fábrica de software ---
+
+/** Con `baseId`, una nueva versión que parte de los archivos de ese encargo. */
+export const crearEncargo = (pedido: string, baseId?: string) =>
+  pedir<Encargo>("/api/fabrica/encargos", {
+    method: "POST",
+    body: JSON.stringify({ pedido, base_id: baseId ?? null }),
+  });
+
+/** Los de la línea actual (sin los archivados por un reinicio). */
+export const listarEncargos = () => pedir<Encargo[]>("/api/fabrica/encargos");
+
+/** Detiene lo que corre y archiva los encargos actuales. No borra nada. */
+export const reiniciarLinea = () =>
+  pedir<{ archivados: string[]; detenidos: string[] }>("/api/fabrica/linea/reiniciar", {
+    method: "POST",
+  });
+
+export const listarEjecuciones = () => pedir<Ejecucion[]>("/api/fabrica/ejecuciones");
+
+export const archivosEjecucion = (id: string) =>
+  pedir<ArchivoEjecucion[]>(`/api/fabrica/ejecuciones/${id}/archivos`);
+
+export const leerArchivoEjecucion = (id: string, ruta: string) =>
+  pedir<{ ruta: string; contenido: string }>(
+    `/api/fabrica/ejecuciones/${id}/archivo?ruta=${encodeURIComponent(ruta)}`,
+  );
+
+export const obtenerEncargo = (id: string) => pedir<Encargo>(`/api/fabrica/encargos/${id}`);
+
+export const responderPregunta = (id: string, preguntaId: string, respuesta: string) =>
+  pedir<Encargo>(`/api/fabrica/encargos/${id}/preguntas/${preguntaId}`, {
+    method: "POST",
+    body: JSON.stringify({ respuesta }),
+  });
+
+export const decidirEspecificacion = (id: string, especId: string, aprobar: boolean) =>
+  pedir<Encargo>(
+    `/api/fabrica/encargos/${id}/especificaciones/${especId}/${aprobar ? "aprobar" : "rechazar"}`,
+    { method: "POST" },
+  );
+
+export const reanudarEncargo = (id: string) =>
+  pedir<Encargo>(`/api/fabrica/encargos/${id}/reanudar`, { method: "POST" });
+
+export const bitacoraEncargo = (id: string) =>
+  pedir<{ integridad: Integridad; registros: RegistroBitacora[] }>(
+    `/api/fabrica/encargos/${id}/bitacora`,
+  );
+
+export const metricasEncargo = (id: string) =>
+  pedir<MetricasEncargo>(`/api/fabrica/encargos/${id}/metricas`);
+
+export const saludFabrica = () => pedir<SaludFabrica>("/api/fabrica/salud");
+
+export interface EstadoCacheLLM {
+  activa: boolean;
+  entradas: number;
+  aciertos: number;
+  ahorro_estimado_usd: number;
+  tokens_ahorrados: number;
+}
+
+export const estadoCacheLLM = () => pedir<EstadoCacheLLM>("/api/fabrica/cache");
+
+export const limpiarCacheLLM = () =>
+  pedir<{ borradas: number }>("/api/fabrica/cache/limpiar", { method: "POST" });
+
+export const pluginsFabrica = () =>
+  pedir<{ cargados: string[]; errores: string[] }>("/api/fabrica/plugins");
+
+export const configFabrica = () => pedir<ConfigFabrica>("/api/fabrica/config");
+
+/**
+ * Extrae el texto de una especificación (.txt, .md, .pdf, .docx) para usarlo
+ * como pedido. No crea el encargo: la persona lo revisa antes de encargar.
+ * Va como multipart, por eso no usa `pedir` (que fuerza JSON).
+ */
+export async function importarDocumento(archivo: File): Promise<{ nombre: string; pedido: string }> {
+  const datos = new FormData();
+  datos.append("archivo", archivo);
+  const res = await fetch(`${API}/api/fabrica/importar`, { method: "POST", body: datos });
+  if (!res.ok) {
+    const detalle = await res.json().catch(() => null);
+    throw new Error(detalle?.detail ?? `${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as { nombre: string; pedido: string };
+}

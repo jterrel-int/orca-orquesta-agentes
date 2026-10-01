@@ -23,8 +23,8 @@ from ..dominio.errores import OAuthFallido
 
 router = APIRouter(prefix="/api/vercel", tags=["vercel"])
 
-# Una sola instalación pendiente a la vez — mismo criterio que "una corrida a
-# la vez" en el orquestador: este es un panel de un solo usuario local.
+# Una sola instalación pendiente a la vez: este es un panel de un solo
+# usuario local.
 _estado_pendiente: str | None = None
 
 

@@ -1,0 +1,64 @@
+"""Adaptador del puerto Cerebro contra cualquier API compatible con el formato
+de chat completions de OpenAI — DeepSeek por defecto.
+
+La idea que motiva este adaptador: cuando las especificaciones están bien
+acotadas y el harness valida todo, un modelo más barato alcanza para buena
+parte de las etapas. Cambiar de proveedor es cambiar .env, no los agentes.
+"""
+
+from __future__ import annotations
+
+import logging
+
+import httpx
+
+from ..dominio.fabrica import Consumo, RespuestaMedida
+from .tarifas import costo_usd
+
+log = logging.getLogger(__name__)
+
+
+class CerebroOpenAICompatible:
+    nombre = "openai-compatible"
+
+    def __init__(self, api_key: str, modelo: str, base_url: str) -> None:
+        self._api_key = api_key
+        self._modelo = modelo
+        self._url = base_url.rstrip("/") + "/chat/completions"
+
+    async def pensar(self, instruccion: str, contexto: str = "", *, respaldo: str = "") -> str:
+        return (await self.pensar_medido(instruccion, contexto, respaldo=respaldo)).texto
+
+    async def pensar_medido(
+        self, instruccion: str, contexto: str = "", *, respaldo: str = ""
+    ) -> RespuestaMedida:
+        cuerpo = {
+            "model": self._modelo,
+            "max_tokens": 2000,
+            "temperature": 0,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"{instruccion}\n\n<contexto>\n{contexto}\n</contexto>",
+                }
+            ],
+        }
+        cabeceras = {"Authorization": f"Bearer {self._api_key}"}
+        try:
+            async with httpx.AsyncClient(timeout=90) as cliente:
+                r = await cliente.post(self._url, json=cuerpo, headers=cabeceras)
+                r.raise_for_status()
+                datos = r.json()
+            opciones = datos.get("choices") or []
+            texto = ""
+            if opciones:
+                texto = str((opciones[0].get("message") or {}).get("content") or "").strip()
+            uso = datos.get("usage") or {}
+            entrada = int(uso.get("prompt_tokens", 0))
+            salida = int(uso.get("completion_tokens", 0))
+            modelo = str(datos.get("model") or self._modelo)
+            consumo = Consumo(modelo, entrada, salida, costo_usd(modelo, entrada, salida))
+            return RespuestaMedida(texto or respaldo, consumo)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Cerebro %s falló (%s); se usa el respaldo", self._modelo, e)
+            return RespuestaMedida(respaldo, Consumo(self._modelo))

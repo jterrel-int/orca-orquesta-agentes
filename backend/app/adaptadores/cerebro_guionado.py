@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..dominio.fabrica import Consumo, RespuestaMedida
+
 
 class CerebroGuionado:
     """Devuelve el respaldo tal cual.
@@ -14,3 +16,8 @@ class CerebroGuionado:
 
     async def pensar(self, instruccion: str, contexto: str = "", *, respaldo: str = "") -> str:
         return respaldo
+
+    async def pensar_medido(
+        self, instruccion: str, contexto: str = "", *, respaldo: str = ""
+    ) -> RespuestaMedida:
+        return RespuestaMedida(respaldo, Consumo("guionado", 0, 0, 0.0))

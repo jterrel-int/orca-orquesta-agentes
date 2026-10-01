@@ -6,6 +6,7 @@ se simulan — estas pruebas no llaman a Vercel ni a Render de verdad.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -16,10 +17,11 @@ from app.adaptadores.persistencia_sqlalchemy import (
     Base,
     RepositorioCredencialRenderSQLAlchemy,
     RepositorioCredencialVercelSQLAlchemy,
+    RepositorioUsoAnthropicSQLAlchemy,
 )
 from app.config import config
 from app.dominio.errores import CredencialInvalida, OAuthFallido
-from app.dominio.modelos import CredencialRender, CredencialVercel
+from app.dominio.modelos import CredencialRender, CredencialVercel, UsoAnthropic
 
 
 @pytest.fixture
@@ -100,52 +102,55 @@ async def test_credencial_render_guardar_y_obtener(sesion: object) -> None:
     assert await repo.obtener() is None
 
 
-# --- construir_desplegador: preferencia de token ---
+async def test_uso_anthropic_establecer_limite_y_sumar_tokens(sesion: object) -> None:
+    repo = RepositorioUsoAnthropicSQLAlchemy(sesion)
+    assert await repo.obtener() is None
+
+    registro = await repo.establecer_limite(1000)
+    assert registro.limite_tokens == 1000
+    assert registro.tokens_usados == 0
+
+    registro = await repo.sumar_tokens(120)
+    registro = await repo.sumar_tokens(80)
+    assert registro.tokens_usados == 200
+
+    # Cambiar el límite no reinicia el contador acumulado.
+    registro = await repo.establecer_limite(500)
+    assert registro.limite_tokens == 500
+    assert registro.tokens_usados == 200
 
 
-class _CredencialesFalsas:
-    def __init__(self, credencial: CredencialVercel | None) -> None:
-        self._credencial = credencial
+async def test_uso_anthropic_sumar_tokens_sin_limite_configurado(sesion: object) -> None:
+    repo = RepositorioUsoAnthropicSQLAlchemy(sesion)
 
-    async def guardar(self, credencial: CredencialVercel) -> None:
-        self._credencial = credencial
-
-    async def obtener(self) -> CredencialVercel | None:
-        return self._credencial
-
-    async def eliminar(self) -> None:
-        self._credencial = None
+    registro = await repo.sumar_tokens(50)
+    assert registro.limite_tokens == 0
+    assert registro.tokens_usados == 50
 
 
-async def test_construir_desplegador_prefiere_token_oauth(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(config, "deploy_enabled", True)
-    monkeypatch.setattr(config, "vercel_token", "token-del-env")
-
-    credenciales = _CredencialesFalsas(CredencialVercel(access_token="token-oauth"))
-    desplegador = await fabricas.construir_desplegador(credenciales)
-
-    assert desplegador._token == "token-oauth"  # type: ignore[attr-defined]
+def test_porcentaje_uso_anthropic() -> None:
+    assert UsoAnthropic(limite_tokens=0, tokens_usados=50).porcentaje() == 0.0
+    assert UsoAnthropic(limite_tokens=200, tokens_usados=20).porcentaje() == 10.0
+    assert UsoAnthropic(limite_tokens=200, tokens_usados=400).porcentaje() == 100.0
 
 
-async def test_construir_desplegador_cae_al_token_del_env_sin_oauth(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(config, "deploy_enabled", True)
-    monkeypatch.setattr(config, "vercel_token", "token-del-env")
-
-    desplegador = await fabricas.construir_desplegador(_CredencialesFalsas(None))
-
-    assert desplegador._token == "token-del-env"  # type: ignore[attr-defined]
+# --- despliegue de la fábrica: simulado salvo que una persona lo active ---
 
 
-async def test_construir_desplegador_simulado_si_deploy_apagado(
-    monkeypatch: pytest.MonkeyPatch,
+def test_desplegador_de_la_fabrica_es_simulado_si_deploy_apagado(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(config, "deploy_enabled", False)
+    desplegador = fabricas.construir_desplegador_fabrica(tmp_path, "abc123", "Fábrica: prueba")
+    assert type(desplegador).__name__ == "DespliegueGitHubSimulado"
 
-    desplegador = await fabricas.construir_desplegador(_CredencialesFalsas(None))
 
-    assert type(desplegador).__name__ == "DespliegueSimulado"
+def test_desplegador_de_la_fabrica_es_github_si_deploy_encendido(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(config, "deploy_enabled", True)
+    desplegador = fabricas.construir_desplegador_fabrica(tmp_path, "abc123", "Fábrica: prueba")
+    assert type(desplegador).__name__ == "DespliegueGitHub"
 
 
 # --- intercambio OAuth con Vercel ---

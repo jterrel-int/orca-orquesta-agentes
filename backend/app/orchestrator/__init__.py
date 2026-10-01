@@ -1,3 +1,3 @@
-from .orquestador import Orquestador, orquestador
+from .lider import LiderFabrica
 
-__all__ = ["Orquestador", "orquestador"]
+__all__ = ["LiderFabrica"]
