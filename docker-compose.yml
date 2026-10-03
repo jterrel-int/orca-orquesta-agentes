@@ -3,7 +3,9 @@ services:
     build: ./backend
     container_name: orquesta-backend
     ports:
-      - "8000:8000"
+      # Solo esta máquina: la API no tiene usuarios. Para exponerla en la red,
+      # define ORQUESTA_TOKEN antes de quitar el 127.0.0.1.
+      - "127.0.0.1:8000:8000"
     environment:
       BRAIN: ${BRAIN:-scripted}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -12,6 +14,7 @@ services:
       DEPLOY_ENABLED: "false"
       ORIGENES_PERMITIDOS: http://localhost:3000
       FABRICA_DIR_ESPACIOS: /fabrica_espacios
+      ORQUESTA_TOKEN: ${ORQUESTA_TOKEN:-}
     volumes:
       # Lo que construye cada encargo queda visible en el anfitrión.
       - ./fabrica_espacios:/fabrica_espacios
@@ -26,7 +29,7 @@ services:
     build: ./frontend
     container_name: orquesta-frontend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       # El navegador resuelve esta URL, no el contenedor: va a localhost.
       NEXT_PUBLIC_API_URL: http://localhost:8000

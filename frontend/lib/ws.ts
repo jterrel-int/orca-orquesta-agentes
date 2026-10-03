@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API } from "./api";
+import { API, TOKEN } from "./api";
 import type { EventoAgente } from "./types";
 
 export type EstadoConexion = "conectando" | "conectado" | "desconectado";
@@ -10,8 +10,9 @@ export type EstadoConexion = "conectando" | "conectado" | "desconectado";
  * http(s) -> ws(s). Con el backend en Render (https) y el frontend en Vercel,
  * esto tiene que dar wss:// o el navegador rechaza la conexión por mixed content.
  */
-export function urlWebSocket(apiUrl: string): string {
-  return apiUrl.replace(/^http/, "ws") + "/ws";
+export function urlWebSocket(apiUrl: string, token = ""): string {
+  const base = apiUrl.replace(/^http/, "ws") + "/ws";
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
 /**
@@ -31,7 +32,7 @@ export function useEventos(maxEventos = 300) {
   const conectar = useCallback(() => {
     if (!vivoRef.current) return;
 
-    const url = urlWebSocket(API);
+    const url = urlWebSocket(API, TOKEN);
     setConexion("conectando");
 
     let ws: WebSocket;

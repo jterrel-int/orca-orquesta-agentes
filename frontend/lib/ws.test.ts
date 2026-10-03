@@ -12,3 +12,9 @@ describe("urlWebSocket", () => {
     );
   });
 });
+
+describe("urlWebSocket con token", () => {
+  it("agrega el token como parámetro cuando el backend lo exige", () => {
+    expect(urlWebSocket("http://localhost:8000", "a b")).toBe("ws://localhost:8000/ws?token=a%20b");
+  });
+});

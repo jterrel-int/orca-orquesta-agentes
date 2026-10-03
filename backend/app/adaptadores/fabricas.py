@@ -11,6 +11,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from ..agents.fabrica import AnalistaRequisitos
 from ..config import config
 from ..dominio.fabrica import ModoAprobacion, PoliticaFabrica
 from ..dominio.puertos import (
@@ -99,6 +100,9 @@ async def construir_cerebro(
             config.openai_compat_api_key,
             modelo or config.openai_compat_modelo,
             config.openai_compat_base_url,
+            max_tokens=config.openai_compat_max_tokens,
+            timeout_s=config.cerebro_timeout_s,
+            reintentos=config.cerebro_reintentos,
         )
 
     api_key, fuente = await _api_key_anthropic(credenciales)
@@ -108,7 +112,12 @@ async def construir_cerebro(
         return CerebroGuionado()
     log.info("Cerebro Anthropic activo (%s)", fuente)
     return CerebroAnthropic(
-        api_key, modelo or config.anthropic_model, registrar_uso=_registrar_uso_anthropic
+        api_key,
+        modelo or config.anthropic_model,
+        registrar_uso=_registrar_uso_anthropic,
+        max_tokens=config.cerebro_max_tokens,
+        timeout_s=config.cerebro_timeout_s,
+        reintentos=config.cerebro_reintentos,
     )
 
 
@@ -185,6 +194,15 @@ async def construir_cerebro_para_rol(rol: str) -> Cerebro:
     return cerebro
 
 
+async def construir_analista() -> AnalistaRequisitos:
+    """El Analista del modo especificaciones usa el modelo del Especificador:
+    es el mismo tipo de trabajo (entender un pedido) y suele ser el barato.
+    """
+    return AnalistaRequisitos(
+        await construir_cerebro_para_rol("especificador"), config.fabrica_limite_contexto
+    )
+
+
 def construir_ejecutor_pruebas() -> EjecutorPruebas:
     if config.fabrica_sandbox == "docker":
         return EjecutorDocker(config.fabrica_imagen_sandbox)
@@ -239,6 +257,8 @@ def construir_lider_fabrica() -> LiderFabrica:
             max_intentos=max(1, config.fabrica_max_intentos),
             presupuesto_encargo_usd=config.fabrica_presupuesto_usd,
             aprobacion_humana=modo,
+            max_rondas=max(1, config.fabrica_max_rondas),
+            timeout_etapa_s=max(0.0, config.fabrica_timeout_etapa_s),
         )
         _lider = LiderFabrica(
             repositorio=RepositorioEncargosSQLAlchemy(sesiones),

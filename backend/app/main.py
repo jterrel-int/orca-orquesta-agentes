@@ -12,7 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .adaptadores.fabricas import construir_lider_fabrica, estado_cerebro
 from .adaptadores.persistencia_sqlalchemy import crear_tablas
-from .api import anthropic_router, fabrica_router, render_router, vercel_router
+from .api import (
+    anthropic_router,
+    fabrica_router,
+    render_router,
+    requisitos_router,
+    vercel_router,
+)
+from .api.seguridad import control_de_acceso
 from .config import config
 from .websocket import gestor, ws_router
 
@@ -43,6 +50,10 @@ app = FastAPI(
     lifespan=ciclo_vida,
 )
 
+# Primero el control de acceso y después CORS: el último que se agrega queda
+# por fuera, así un 401/403 también lleva las cabeceras CORS y el panel puede
+# mostrar el motivo en vez de un error de red opaco.
+app.middleware("http")(control_de_acceso)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.lista_origenes,
@@ -52,6 +63,7 @@ app.add_middleware(
 )
 
 app.include_router(fabrica_router)
+app.include_router(requisitos_router)
 app.include_router(vercel_router)
 app.include_router(render_router)
 app.include_router(anthropic_router)

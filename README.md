@@ -115,6 +115,52 @@ pedido → Especificador → por cada especificación, en orden de dependencias:
 | **Diagnosticador** | Solo existe si el Revisor rechaza: ¿falló el código, la especificación o el entorno? | `agents/fabrica/diagnosticador.py` |
 | **Verificador** | Caja blanca (cada función pública tiene una prueba, leído del AST) y Playwright con Chromium en un contenedor | `agents/fabrica/verificador.py` |
 | **Despliegue** | Escribe `.github/workflows/ci.yml`, abre la rama y el PR | `agents/fabrica/despliegue.py` |
+| **Analista** | Solo en el modo "Diseñar por especificaciones": agrupa los requisitos, detecta la intención y pregunta o recomienda lo que falta | `agents/fabrica/analista.py` |
+
+### Dos formas de pedir
+
+En `/fabrica` hay un interruptor:
+
+- **Pedido directo**: el texto (o un documento importado) va tal cual al
+  Especificador.
+- **Diseñar por especificaciones**: escribes requisitos uno por uno. Mientras
+  escribes, el panel reconoce de qué va el proyecto ("Parece una tienda en
+  línea centrada en productos y carrito"), ofrece cómo completar la frase
+  (<kbd>Tab</kbd> acepta) y sugiere requisitos típicos que faltan. Al pulsar
+  **Listo**, el Analista agrupa los requisitos en módulos, mide la cobertura
+  por categoría (usuarios, datos, reglas, interfaz, errores, seguridad,
+  aceptación) y, si falta algo, hace como mucho 5 preguntas de opción múltiple
+  con una **opción recomendada**, o recomienda requisitos para autocompletar.
+  El resultado es un pedido en notación EARS ("CUANDO …, EL SISTEMA DEBE …"),
+  una viñeta por módulo, que se revisa y se encarga a la misma fábrica.
+
+Las sugerencias en vivo son deterministas y gratis (`dominio/requisitos.py`);
+solo el análisis final usa el cerebro, y si no responde queda el análisis
+determinista. Las ideas vienen de [spec-kit](https://github.com/github/spec-kit)
+(`/clarify`: taxonomía de cobertura, máximo 5 preguntas, opción recomendada)
+y de [Kiro](https://kiro.dev/docs/specs/) (requisitos en EARS).
+
+### Un encargo siempre termina
+
+Ningún encargo queda "en curso" para siempre ni esperando sin decir por qué:
+
+- **Tope de tiempo por etapa** (`FABRICA_TIMEOUT_ETAPA_S`): un cerebro o unas
+  pruebas colgadas cierran esa especificación como fallida y las demás siguen.
+- **Detección de atascos**, como el [StuckDetector de
+  OpenHands](https://docs.openhands.dev/sdk/guides/agent-stuck-detector): el
+  mismo error 3 veces (ignorando tiempos, números y rutas), un vaivén A-B-A-B
+  entre dos errores, o un reintento que entrega exactamente los mismos
+  archivos. La primera vez se **cambia de estrategia**: el Implementador
+  descarta el enfoque y reescribe desde cero. Si sigue igual, la
+  especificación se cierra con un informe en vez de seguir gastando.
+- **Tope de rondas** (`FABRICA_MAX_RONDAS`): "Reintentar" reinicia los
+  intentos, pero no las rondas, así que tampoco se puede girar sin fin entre
+  reintentos y preguntas.
+- **Reintentos de red** en los cerebros (429, 529, 5xx, cortes) y un
+  `max_tokens` suficiente para que el JSON del Implementador no llegue cortado
+  (antes era 2000 y el encargo caía a la plantilla de respaldo).
+- **Detener** y **Cerrar con lo aprobado** en el panel de cada encargo, con
+  un aviso arriba que dice qué está pasando y qué puedes hacer.
 
 ### Los principios, y dónde se cumplen
 
@@ -235,6 +281,11 @@ los comandos `git`/`gh` que correría.
 | POST | `/api/fabrica/encargos/{id}/preguntas/{pid}` | `{respuesta}` |
 | POST | `/api/fabrica/encargos/{id}/especificaciones/{sid}/aprobar` · `/rechazar` | Compuerta humana |
 | POST | `/api/fabrica/encargos/{id}/reanudar` | Tras un reinicio o un fallo |
+| POST | `/api/fabrica/encargos/{id}/detener` | Corta un encargo en marcha; queda interrumpido |
+| POST | `/api/fabrica/encargos/{id}/finalizar` | Lo cierra con lo ya aprobado; lo pendiente queda sin terminar |
+| POST | `/api/fabrica/requisitos/sugerir` | `{requisitos, borrador}` → intención y autocompletado (determinista) |
+| POST | `/api/fabrica/requisitos/analizar` | `{requisitos, respuestas}` → módulos, cobertura, preguntas y recomendaciones |
+| POST | `/api/fabrica/requisitos/componer` | → el pedido final en EARS, para revisar y encargar |
 | GET | `/api/fabrica/encargos/{id}/bitacora` · `/metricas` | Evidencia y costo por etapa |
 | GET | `/api/fabrica/salud` | Signos vitales y velocidad |
 | GET/POST | `/api/fabrica/cache` · `/cache/limpiar` | Caché de respuestas |
@@ -491,6 +542,33 @@ Copia `.env.example` a `.env`. Ninguna es obligatoria.
 | `VERCEL_INTEGRATION_SLUG` | — | El URL Slug que le pusiste a la integración |
 | `VERCEL_OAUTH_REDIRECT_URI` | `.../api/vercel/oauth/callback` | Debe coincidir con el Redirect URL registrado |
 | `RENDER_SERVICE_NAME` | `orquesta-backend` | Servicio que buscar al conectar Render |
-| `ORIGENES_PERMITIDOS` | `localhost:3000` | CORS |
+| `ORIGENES_PERMITIDOS` | `localhost:3000` | CORS, y también los orígenes desde los que se aceptan `POST` y el WebSocket (anti-CSRF) |
+| `ORQUESTA_TOKEN` | — | Si se define, toda la API (salvo `/api/health`) y `/ws` exigen este token. Recomendado fuera de localhost |
+| `CEREBRO_MAX_TOKENS` | `16000` | Tope de salida por llamada a Anthropic |
+| `OPENAI_COMPAT_MAX_TOKENS` | `8192` | Lo mismo para `openai-compatible` (DeepSeek no admite más) |
+| `CEREBRO_TIMEOUT_S` / `CEREBRO_REINTENTOS` | `300` / `2` | Por llamada HTTP; los reintentos cubren 429/529/5xx y cortes de red |
+| `FABRICA_MAX_RONDAS` | `6` | Intentos totales por especificación, reintentos humanos incluidos |
+| `FABRICA_TIMEOUT_ETAPA_S` | `1200` | Tope por etapa; `0` lo desactiva |
 
-En el frontend, `NEXT_PUBLIC_API_URL` (por defecto `http://localhost:8000`).
+En el frontend, `NEXT_PUBLIC_API_URL` (por defecto `http://localhost:8000`) y,
+si el backend usa `ORQUESTA_TOKEN`, `NEXT_PUBLIC_ORQUESTA_TOKEN` con el mismo
+valor.
+
+### Seguridad
+
+- La API no tiene usuarios: pensada para correr en tu máquina. Docker Compose
+  publica los puertos solo en `127.0.0.1`. Si la expones en una red, define
+  `ORQUESTA_TOKEN`.
+- Los `POST` y el WebSocket se rechazan si vienen de un origen que no está en
+  `ORIGENES_PERMITIDOS`: sin esto, cualquier página abierta en el mismo
+  navegador podía aprobar especificaciones, reiniciar la línea o escuchar la
+  telemetría contra `localhost:8000`.
+- El código que genera un LLM se ejecuta para probarlo. Con
+  `FABRICA_SANDBOX=local` corre con tus permisos (sin las variables de entorno
+  que parecen secretos, pero con acceso a tus archivos): con un cerebro real
+  usa `FABRICA_SANDBOX=docker`.
+- El Implementador no sigue enlaces simbólicos: código generado no puede
+  enlazar un archivo del espacio de trabajo a tu `.env` para que el siguiente
+  intento se lo mande al LLM o lo sobrescriba.
+- La API key de Anthropic guardada desde Configuración vive en texto plano en
+  `backend/orquesta.db`: no compartas ese archivo.

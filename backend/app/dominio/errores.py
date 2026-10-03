@@ -33,6 +33,17 @@ class EncargoNoEncontrado(ErrorDominio):
         self.encargo_id = encargo_id
 
 
+class EtapaVencida(ErrorDominio):
+    """Una etapa superó el tope de tiempo de la política: el cerebro o el
+    subproceso quedó colgado. El Líder la cierra en vez de esperar para siempre.
+    """
+
+    def __init__(self, etapa: str, segundos: float) -> None:
+        super().__init__(f"La etapa «{etapa}» superó el tope de {segundos:.0f} s")
+        self.etapa = etapa
+        self.segundos = segundos
+
+
 class AccionNoPermitida(ErrorDominio):
     """La acción humana pedida no corresponde al estado actual del encargo
     (responder una pregunta ya respondida, aprobar algo que no espera

@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from ..api.seguridad import websocket_permitido
 from .manager import gestor
 
 log = logging.getLogger(__name__)
@@ -13,6 +14,10 @@ router = APIRouter()
 
 @router.websocket("/ws")
 async def canal_eventos(ws: WebSocket) -> None:
+    if not websocket_permitido(ws):
+        # 1008 = violación de política. Antes de aceptar: no se envía nada.
+        await ws.close(code=1008)
+        return
     await gestor.conectar(ws)
     try:
         while True:

@@ -94,6 +94,21 @@ class EjecutorGuionado:
         return ResultadoComando(comando, codigo, salida, 0.01, "falso")
 
 
+class EjecutorConSalidas:
+    """Devuelve (código, salida) en orden; después del último, repite el último."""
+
+    def __init__(self, respuestas: list[tuple[int, str]]) -> None:
+        self._respuestas = respuestas
+        self.llamadas = 0
+
+    async def ejecutar(
+        self, directorio: str, comando: list[str], timeout_s: float
+    ) -> ResultadoComando:
+        codigo, salida = self._respuestas[min(self.llamadas, len(self._respuestas) - 1)]
+        self.llamadas += 1
+        return ResultadoComando(comando, codigo, salida, 0.01, "falso")
+
+
 class CerebroCaro(CerebroGuionado):
     """Guionado que cobra: para probar el tope de presupuesto."""
 

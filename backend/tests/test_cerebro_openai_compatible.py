@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
 
-import app.adaptadores.cerebro_openai_compatible as modulo
 from app.adaptadores import tarifas
 from app.adaptadores.cerebro_openai_compatible import CerebroOpenAICompatible
 from app.config import config
@@ -42,7 +42,7 @@ class _Cliente:
 
 def _parchar(monkeypatch: pytest.MonkeyPatch, respuesta: _Respuesta) -> None:
     _Cliente.peticiones = []
-    monkeypatch.setattr(modulo.httpx, "AsyncClient", lambda **_: _Cliente(respuesta))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_: _Cliente(respuesta))
 
 
 async def test_devuelve_texto_y_consumo_con_tarifa_extra(monkeypatch: pytest.MonkeyPatch) -> None:

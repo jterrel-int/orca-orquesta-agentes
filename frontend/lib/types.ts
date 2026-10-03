@@ -100,6 +100,10 @@ export interface Especificacion {
   intentos: number;
   motivo: string;
   aprobada_por_humano: boolean;
+  /** Intentos sumando todas las rondas (los reintentos humanos no lo reinician). */
+  rondas?: number;
+  /** "" = normal; "reescritura" = tras un atasco, se reescribe desde cero. */
+  estrategia?: string;
 }
 
 export interface Pregunta {
@@ -211,6 +215,8 @@ export interface ConfigFabrica {
   prefect_ui_url: string | null;
   aprobacion_humana: "nunca" | "ambiguedad" | "siempre";
   max_intentos: number;
+  max_rondas?: number;
+  timeout_etapa_s?: number;
   presupuesto_usd: number;
   cache_llm: boolean;
 }
@@ -239,4 +245,64 @@ export interface Ejecucion {
 export interface ArchivoEjecucion {
   ruta: string;
   bytes: number;
+}
+
+// --- modo "diseñar por especificaciones" (backend/app/dominio/requisitos.py) ---
+
+export interface IntencionRequisitos {
+  dominio: string | null;
+  nombre: string;
+  resumen: string;
+  /** 0..1: cuánto se parece a un tipo de proyecto conocido. */
+  confianza: number;
+  entidades: string[];
+}
+
+export interface SugerenciasRequisitos {
+  intencion: IntencionRequisitos;
+  /** Cómo completar la frase que se está escribiendo. */
+  autocompletado: string[];
+  /** Requisitos típicos de este tipo de proyecto que todavía faltan. */
+  sugerencias: string[];
+}
+
+export interface ModuloRequisitos {
+  nombre: string;
+  /** Posiciones en la lista de requisitos. */
+  requisitos: number[];
+}
+
+export interface PreguntaRequisitos {
+  id: string;
+  categoria: string;
+  texto: string;
+  porque: string;
+  opciones: string[];
+  recomendada: number;
+}
+
+export interface RecomendacionRequisitos {
+  texto: string;
+  categoria: string;
+  porque: string;
+}
+
+export interface RespuestaRequisito {
+  categoria: string;
+  pregunta: string;
+  respuesta: string;
+}
+
+export type CoberturaCategoria = "clara" | "parcial" | "falta" | "resuelta";
+
+export interface AnalisisRequisitos {
+  intencion: IntencionRequisitos;
+  modulos: ModuloRequisitos[];
+  cobertura: Record<string, CoberturaCategoria>;
+  preguntas: PreguntaRequisitos[];
+  recomendaciones: RecomendacionRequisitos[];
+  listo: boolean;
+  origen: "heuristica" | "cerebro";
+  costo_usd: number | null;
+  modelo: string;
 }

@@ -3,6 +3,7 @@ Líder (orchestrator/lider.py) decide el orden, los reintentos y cuándo parar
 a preguntarle a una persona.
 """
 
+from .analista import AnalistaRequisitos
 from .comun import LIMITE_CONTEXTO, Medidor
 from .despliegue import DespliegueFabrica
 from .diagnosticador import Diagnosticador
@@ -21,4 +22,5 @@ __all__ = [
     "Diagnosticador",
     "Verificador",
     "DespliegueFabrica",
+    "AnalistaRequisitos",
 ]

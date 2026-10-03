@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -59,6 +60,16 @@ class Especificacion:
     intentos: int = 0
     motivo: str = ""
     aprobada_por_humano: bool = False
+    # Intentos acumulados entre rondas: "Reintentar" vuelve `intentos` a cero,
+    # `rondas` no. Es el tope duro que impide que una especificación quede
+    # girando para siempre entre reintentos y preguntas humanas.
+    rondas: int = 0
+    # Huella de cada rechazo (ver huella_rechazo): con esto se detecta un
+    # atasco aunque los mensajes cambien en tiempos, números o rutas.
+    huellas: list[str] = field(default_factory=list)
+    # "" = reintento normal; "reescritura" = tras un atasco, el Implementador
+    # descarta el enfoque previo y escribe desde cero.
+    estrategia: str = ""
 
 
 @dataclass
@@ -326,6 +337,14 @@ class PoliticaFabrica:
     presupuesto_encargo_usd: float = 1.0
     aprobacion_humana: ModoAprobacion = "ambiguedad"
     directorios_escritura: tuple[str, ...] = ("src/", "tests/", "frontend/", "e2e/")
+    # Tope duro de intentos por especificación sumando todas las rondas
+    # (reintentos humanos incluidos). Al llegar, la especificación se cierra
+    # como fallida con un informe en vez de volver a preguntar.
+    max_rondas: int = 6
+    # Ninguna etapa puede tardar más que esto; 0 lo desactiva. Es el reloj
+    # que garantiza que un cerebro o un subproceso colgado no deja el encargo
+    # "en curso" para siempre.
+    timeout_etapa_s: float = 900.0
 
 
 def ruta_permitida(ruta: str, politica: PoliticaFabrica) -> bool:
@@ -345,6 +364,58 @@ def ruta_permitida(ruta: str, politica: PoliticaFabrica) -> bool:
 
 def presupuesto_agotado(encargo: Encargo, politica: PoliticaFabrica) -> bool:
     return 0 < politica.presupuesto_encargo_usd <= encargo.costo_usd
+
+
+# --- detección de atascos ---
+#
+# Inspirado en el StuckDetector de OpenHands (openhands/controller/stuck.py):
+# un agente que repite la misma acción con el mismo resultado, o que alterna
+# entre dos errores, no va a salir solo de ahí. Reintentar igual solo gasta.
+
+_RUIDO = (
+    (re.compile(r"\bin \d+(?:\.\d+)?s\b"), ""),  # "in 1.62s" de pytest
+    (re.compile(r"0x[0-9a-f]+"), "0x"),  # direcciones de memoria
+    (re.compile(r"[a-z]:[\\/][^\s:'\"]+|/[^\s:'\"]+/"), "<ruta>"),  # rutas absolutas
+    (re.compile(r"\d+"), "#"),  # números de línea, conteos
+    (re.compile(r"\s+"), " "),
+)
+
+
+def huella_rechazo(motivo: str) -> str:
+    """Identidad de un rechazo sin el ruido que cambia entre intentos
+    idénticos: tiempos, conteos, números de línea, rutas y direcciones.
+    """
+    normal = motivo.lower()
+    for patron, reemplazo in _RUIDO:
+        normal = patron.sub(reemplazo, normal)
+    return hashlib.sha1(normal.strip().encode("utf-8")).hexdigest()[:12]
+
+
+def detectar_atasco(huellas: list[str], repeticiones: int = 3) -> str | None:
+    """Por qué una especificación está atascada, o None si todavía avanza.
+
+    - el mismo rechazo `repeticiones` veces seguidas;
+    - un vaivén A, B, A, B entre dos rechazos;
+    - el mismo rechazo `repeticiones` veces en total, aunque no seguidas
+      (típico de "Reintentar" humano sobre un error que no cambia).
+    """
+    if len(huellas) >= repeticiones and len(set(huellas[-repeticiones:])) == 1:
+        return f"el mismo error se repitió {repeticiones} veces seguidas"
+    if len(huellas) >= 4:
+        a, b, c, d = huellas[-4:]
+        if a == c and b == d and a != b:
+            return "alterna entre dos errores sin avanzar"
+    if huellas and huellas.count(huellas[-1]) >= repeticiones:
+        return f"el mismo error apareció {huellas.count(huellas[-1])} veces en total"
+    return None
+
+
+def firma_archivos(escritos: list[dict[str, Any]]) -> str:
+    """Huella de lo que escribió un intento: mismos archivos con el mismo
+    contenido → mismo valor. Sirve para detectar un reintento que no cambió nada.
+    """
+    pares = sorted((str(e.get("ruta")), str(e.get("sha256"))) for e in escritos)
+    return hashlib.sha1(json.dumps(pares).encode("utf-8")).hexdigest()[:12]
 
 
 def aplicar_modo_aprobacion(encargo: Encargo, modo: ModoAprobacion) -> list[str]:

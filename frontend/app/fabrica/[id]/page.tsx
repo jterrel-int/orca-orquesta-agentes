@@ -5,10 +5,13 @@ import { use, useCallback, useEffect, useMemo, useState } from "react";
 import LogStream from "@/components/LogStream";
 import CarrilesParalelos from "@/components/fabrica/CarrilesParalelos";
 import LineaDeTiempo, { resumenParalelismo } from "@/components/fabrica/LineaDeTiempo";
+import { AlertTriangle, CheckCircle2, Hand, Loader2, Play, Square, XCircle } from "lucide-react";
 import {
   bitacoraEncargo,
   configFabrica,
   decidirEspecificacion,
+  detenerEncargo,
+  finalizarEncargo,
   metricasEncargo,
   obtenerEncargo,
   reanudarEncargo,
@@ -18,8 +21,10 @@ import {
   ETAPAS_FABRICA,
   ETIQUETA_ENCARGO,
   ETIQUETA_ESPEC,
+  type Situacion,
   claseEncargo,
   derivarCarriles,
+  situacionEncargo,
   usd,
 } from "@/lib/fabrica";
 import type {
@@ -88,6 +93,83 @@ function TarjetaPregunta({
         </button>
       </form>
     </article>
+  );
+}
+
+const ICONO_TONO = { ok: CheckCircle2, espera: Hand, mal: XCircle, neutro: Loader2 } as const;
+
+/**
+ * Qué está pasando y qué puede hacer la persona, arriba de todo. Cerrar pide
+ * una confirmación en el mismo botón (sin diálogos del navegador): deja lo
+ * pendiente como sin terminar y no se deshace.
+ */
+function BannerSituacion({
+  situacion,
+  hayDecisiones,
+  onDetener,
+  onReanudar,
+  onCerrar,
+}: {
+  situacion: Situacion;
+  hayDecisiones: boolean;
+  onDetener: () => Promise<void>;
+  onReanudar: () => Promise<void>;
+  onCerrar: () => Promise<void>;
+}) {
+  const [confirmando, setConfirmando] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const Icono = ICONO_TONO[situacion.tono];
+
+  async function correr(fn: () => Promise<void>) {
+    setOcupado(true);
+    try {
+      await fn();
+    } finally {
+      setOcupado(false);
+      setConfirmando(false);
+    }
+  }
+
+  return (
+    <section className={`banner-situacion ${situacion.tono}`} aria-live="polite">
+      <Icono size={22} aria-hidden className={situacion.tono === "neutro" ? "girando" : ""} />
+      <div className="texto-situacion">
+        <strong>{situacion.titulo}</strong>
+        <span>{situacion.detalle}</span>
+      </div>
+      <div className="acciones-situacion">
+        {hayDecisiones && (
+          <a className="boton-enlace" href="#decisiones">
+            Ir a las decisiones
+          </a>
+        )}
+        {situacion.puedeReanudar && (
+          <button type="button" className="primario" disabled={ocupado} onClick={() => correr(onReanudar)}>
+            <Play size={14} aria-hidden /> Reanudar
+          </button>
+        )}
+        {situacion.puedeDetener && (
+          <button type="button" disabled={ocupado} onClick={() => correr(onDetener)}>
+            <Square size={14} aria-hidden /> Detener
+          </button>
+        )}
+        {situacion.puedeCerrar &&
+          (confirmando ? (
+            <>
+              <button type="button" className="peligro" disabled={ocupado} onClick={() => correr(onCerrar)}>
+                <AlertTriangle size={14} aria-hidden /> Sí, cerrar con lo aprobado
+              </button>
+              <button type="button" onClick={() => setConfirmando(false)}>
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button type="button" disabled={ocupado} onClick={() => setConfirmando(true)}>
+              Cerrar con lo aprobado
+            </button>
+          ))}
+      </div>
+    </section>
   );
 }
 
@@ -162,6 +244,14 @@ export default function PaginaEncargo({ params }: { params: Promise<{ id: string
   const abiertas = encargo.preguntas.filter((p) => p.respuesta === null);
 
   const aprobadas = encargo.especificaciones.filter((e) => e.estado === "aprobada").length;
+  const total = encargo.especificaciones.length;
+  const sinResolver = encargo.especificaciones.filter(
+    (e) => e.estado === "fallida" || e.estado === "bloqueada",
+  ).length;
+  const esperandoAprobacion = encargo.especificaciones.filter(
+    (e) => e.estado === "esperando_aprobacion",
+  ).length;
+  const situacion = situacionEncargo(encargo);
   const ahorro =
     paralelo && paralelo.secuencial > paralelo.real ? 1 - paralelo.real / paralelo.secuencial : 0;
 
@@ -235,14 +325,42 @@ export default function PaginaEncargo({ params }: { params: Promise<{ id: string
               </small>
             </div>
           </div>
-          {encargo.motivo && <p className="error">{encargo.motivo}</p>}
-          {error && <p className="error">{error}</p>}
-          {(encargo.estado === "interrumpido" || encargo.estado === "fallido") && !encargo.corriendo && (
-            <button type="button" className="primario" onClick={() => accion(() => reanudarEncargo(id))}>
-              Reanudar
-            </button>
+          {total > 0 && (
+            <div
+              className="barra-progreso"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={total}
+              aria-valuenow={aprobadas}
+              aria-label="Especificaciones aprobadas"
+            >
+              <i className="ok" style={{ width: `${(aprobadas / total) * 100}%` }} />
+              <i className="mal" style={{ width: `${(sinResolver / total) * 100}%` }} />
+            </div>
           )}
         </section>
+
+        <BannerSituacion
+          situacion={situacion}
+          hayDecisiones={abiertas.length > 0 || esperandoAprobacion > 0}
+          onDetener={() => accion(() => detenerEncargo(id))}
+          onReanudar={() => accion(() => reanudarEncargo(id))}
+          onCerrar={() => accion(() => finalizarEncargo(id))}
+        />
+        {error && <p className="error">{error}</p>}
+
+        {abiertas.length > 0 && (
+          <section id="decisiones">
+            <h2 className="titulo-seccion">Decisiones pendientes</h2>
+            {abiertas.map((p) => (
+              <TarjetaPregunta
+                key={p.id}
+                pregunta={p}
+                onResponder={(r) => accion(() => responderPregunta(id, p.id, r))}
+              />
+            ))}
+          </section>
+        )}
 
         <ol className="flujo-agentes" aria-label="Agentes del pipeline">
           {ETAPAS_FABRICA.map((etapa) => {
@@ -270,19 +388,6 @@ export default function PaginaEncargo({ params }: { params: Promise<{ id: string
           vivo={encargo.corriendo}
         />
 
-        {abiertas.length > 0 && (
-          <section>
-            <h2 className="titulo-seccion">Decisiones pendientes</h2>
-            {abiertas.map((p) => (
-              <TarjetaPregunta
-                key={p.id}
-                pregunta={p}
-                onResponder={(r) => accion(() => responderPregunta(id, p.id, r))}
-              />
-            ))}
-          </section>
-        )}
-
         <h2 className="titulo-seccion">Detalle de las especificaciones</h2>
         {encargo.especificaciones.length === 0 && (
           <p className="apagado">
@@ -299,8 +404,14 @@ export default function PaginaEncargo({ params }: { params: Promise<{ id: string
                 <h3>{e.titulo}</h3>
               </div>
               <div className="cuerpo-tarea">
+                {e.estrategia === "reescritura" && (
+                  <span className="chip-estrategia">
+                    {e.estado === "en_curso" ? "reescribiendo desde cero" : "se reescribió desde cero"}
+                  </span>
+                )}
                 <span className="apagado">
-                  {ETIQUETA_ESPEC[e.estado]} · {e.intentos} intento(s)
+                  {ETIQUETA_ESPEC[e.estado]} · {e.rondas ?? e.intentos} intento(s)
+                  {config?.max_rondas ? ` de ${config.max_rondas} como máximo` : ""}
                   {e.depende_de.length > 0 && ` · depende de ${e.depende_de.join(", ")}`}
                   {e.requiere_aprobacion && " · requiere aprobación"}
                   {e.e2e && " · e2e"}
@@ -330,6 +441,11 @@ export default function PaginaEncargo({ params }: { params: Promise<{ id: string
           ))}
         </div>
 
+        <details className="seccion-plegable">
+          <summary>
+            <span>Detalles técnicos</span>
+            <small className="apagado">línea de tiempo, costos por etapa, bitácora sellada y eventos en vivo</small>
+          </summary>
         <h2 className="titulo-seccion">Línea de tiempo</h2>
         <p className="apagado">
           Cada barra es una etapa con su duración real. Barras en la misma franja vertical, en filas
@@ -401,6 +517,7 @@ export default function PaginaEncargo({ params }: { params: Promise<{ id: string
 
         <h2 className="titulo-seccion">Eventos en vivo</h2>
         <LogStream eventos={propios} />
+        </details>
       </main>
     </>
   );

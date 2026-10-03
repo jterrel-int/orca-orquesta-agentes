@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 
-import httpx
-
 from ..dominio.fabrica import Consumo, RespuestaMedida
+from .reintentos_http import post_con_reintentos
 from .tarifas import costo_usd
 
 log = logging.getLogger(__name__)
@@ -24,10 +23,23 @@ class CerebroAnthropic:
     URL = "https://api.anthropic.com/v1/messages"
 
     def __init__(
-        self, api_key: str, modelo: str, registrar_uso: RegistradorDeUso | None = None
+        self,
+        api_key: str,
+        modelo: str,
+        registrar_uso: RegistradorDeUso | None = None,
+        *,
+        max_tokens: int = 16000,
+        timeout_s: float = 300.0,
+        reintentos: int = 2,
     ) -> None:
         self._api_key = api_key
         self._modelo = modelo
+        # El Implementador devuelve archivos completos dentro de un JSON: con
+        # el tope viejo de 2000 tokens la respuesta llegaba cortada, el JSON no
+        # se podía leer y el encargo caía a la plantilla de respaldo.
+        self._max_tokens = max_tokens
+        self._timeout_s = timeout_s
+        self._reintentos = reintentos
         # Anthropic no expone el gasto de la cuenta a una API key normal; este
         # callback es cómo Orquesta lleva su propio contador de tokens (ver
         # dominio.modelos.UsoAnthropic) sin que este adaptador conozca SQLAlchemy.
@@ -41,7 +53,7 @@ class CerebroAnthropic:
     ) -> RespuestaMedida:
         cuerpo = {
             "model": self._modelo,
-            "max_tokens": 2000,
+            "max_tokens": self._max_tokens,
             "messages": [
                 {
                     "role": "user",
@@ -55,10 +67,20 @@ class CerebroAnthropic:
             "content-type": "application/json",
         }
         try:
-            async with httpx.AsyncClient(timeout=60) as cliente:
-                r = await cliente.post(self.URL, json=cuerpo, headers=cabeceras)
-                r.raise_for_status()
-                datos = r.json()
+            r = await post_con_reintentos(
+                self.URL,
+                cuerpo=cuerpo,
+                cabeceras=cabeceras,
+                timeout_s=self._timeout_s,
+                reintentos=self._reintentos,
+            )
+            datos = r.json()
+            if datos.get("stop_reason") == "max_tokens":
+                log.warning(
+                    "Cerebro Anthropic: respuesta cortada en max_tokens=%s; si el JSON no "
+                    "se puede leer se usará el respaldo (sube CEREBRO_MAX_TOKENS)",
+                    self._max_tokens,
+                )
             partes = [
                 b.get("text", "") for b in datos.get("content", []) if b.get("type") == "text"
             ]

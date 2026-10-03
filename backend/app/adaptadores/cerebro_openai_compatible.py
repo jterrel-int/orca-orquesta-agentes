@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import logging
 
-import httpx
-
 from ..dominio.fabrica import Consumo, RespuestaMedida
+from .reintentos_http import post_con_reintentos
 from .tarifas import costo_usd
 
 log = logging.getLogger(__name__)
@@ -21,10 +20,23 @@ log = logging.getLogger(__name__)
 class CerebroOpenAICompatible:
     nombre = "openai-compatible"
 
-    def __init__(self, api_key: str, modelo: str, base_url: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        modelo: str,
+        base_url: str,
+        *,
+        max_tokens: int = 8192,
+        timeout_s: float = 300.0,
+        reintentos: int = 2,
+    ) -> None:
         self._api_key = api_key
         self._modelo = modelo
         self._url = base_url.rstrip("/") + "/chat/completions"
+        # DeepSeek admite hasta 8192 de salida; más que eso lo rechaza con 400.
+        self._max_tokens = max_tokens
+        self._timeout_s = timeout_s
+        self._reintentos = reintentos
 
     async def pensar(self, instruccion: str, contexto: str = "", *, respaldo: str = "") -> str:
         return (await self.pensar_medido(instruccion, contexto, respaldo=respaldo)).texto
@@ -34,7 +46,7 @@ class CerebroOpenAICompatible:
     ) -> RespuestaMedida:
         cuerpo = {
             "model": self._modelo,
-            "max_tokens": 2000,
+            "max_tokens": self._max_tokens,
             "temperature": 0,
             "messages": [
                 {
@@ -45,12 +57,23 @@ class CerebroOpenAICompatible:
         }
         cabeceras = {"Authorization": f"Bearer {self._api_key}"}
         try:
-            async with httpx.AsyncClient(timeout=90) as cliente:
-                r = await cliente.post(self._url, json=cuerpo, headers=cabeceras)
-                r.raise_for_status()
-                datos = r.json()
+            r = await post_con_reintentos(
+                self._url,
+                cuerpo=cuerpo,
+                cabeceras=cabeceras,
+                timeout_s=self._timeout_s,
+                reintentos=self._reintentos,
+            )
+            datos = r.json()
             opciones = datos.get("choices") or []
             texto = ""
+            if opciones and opciones[0].get("finish_reason") == "length":
+                log.warning(
+                    "Cerebro %s: respuesta cortada en max_tokens=%s (sube "
+                    "OPENAI_COMPAT_MAX_TOKENS si el modelo lo admite)",
+                    self._modelo,
+                    self._max_tokens,
+                )
             if opciones:
                 texto = str((opciones[0].get("message") or {}).get("content") or "").strip()
             uso = datos.get("usage") or {}

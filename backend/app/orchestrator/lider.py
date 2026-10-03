@@ -17,6 +17,16 @@ El estado vive en el repositorio, no en memoria: una pausa humana termina la
 tarea de asyncio, y la acción humana (responder, aprobar, reanudar) lanza una
 nueva que retoma desde lo que está guardado. Un reinicio del proceso deja los
 encargos activos como "interrumpido", listos para reanudar.
+
+Garantía de terminación — un encargo nunca queda "en curso" para siempre:
+- cada etapa tiene un tope de tiempo (politica.timeout_etapa_s);
+- un atraso repetido (mismo error, vaivén entre dos errores, mismos archivos
+  otra vez) se detecta como en el StuckDetector de OpenHands: primero se
+  cambia de estrategia (reescribir desde cero) y, si sigue igual, la
+  especificación se cierra como fallida con un informe;
+- `rondas` acota los intentos de una especificación sumando los reintentos
+  humanos, así "Reintentar" tampoco puede girar sin fin;
+- una persona puede detener un encargo o cerrarlo con lo ya aprobado.
 """
 
 from __future__ import annotations
@@ -42,7 +52,13 @@ from ..agents.fabrica import (
     Revisor,
     Verificador,
 )
-from ..dominio.errores import AccionNoPermitida, DespliegueFallido, EncargoNoEncontrado
+from ..agents.fabrica.implementador import archivo_seguro
+from ..dominio.errores import (
+    AccionNoPermitida,
+    DespliegueFallido,
+    EncargoNoEncontrado,
+    EtapaVencida,
+)
 from ..dominio.fabrica import (
     ESTADOS_ACTIVOS,
     Ejecucion,
@@ -54,8 +70,11 @@ from ..dominio.fabrica import (
     Pregunta,
     ahora_iso,
     aplicar_modo_aprobacion,
+    detectar_atasco,
     especificaciones_listas,
     estado_final,
+    firma_archivos,
+    huella_rechazo,
     presupuesto_agotado,
     sha256_texto,
 )
@@ -80,6 +99,9 @@ OPCION_REINTENTAR = "Reintentar"
 OPCION_DESCARTAR = "Descartar"
 MOTIVO_DESCARTADA = "Descartada por decisión humana"
 MOTIVO_RECHAZADA = "Rechazada por una persona"
+MOTIVO_SIN_TERMINAR = "Sin terminar: el encargo se cerró con lo ya aprobado"
+RESPUESTA_CIERRE = "Encargo cerrado por una persona"
+ESTRATEGIA_REESCRITURA = "reescritura"
 
 
 class LiderFabrica:
@@ -354,18 +376,91 @@ class LiderFabrica:
                 e.estado = "pendiente"
             # Reanudar un fallido vuelve a intentar lo que falló (y lo que quedó
             # bloqueado por eso), salvo lo que una persona decidió descartar.
+            # Es una decisión humana explícita: también limpia el historial de
+            # atascos, o la especificación se volvería a cerrar al primer intento.
             elif e.estado in ("fallida", "bloqueada") and e.motivo not in (
                 MOTIVO_DESCARTADA,
                 MOTIVO_RECHAZADA,
             ):
                 e.estado, e.intentos, e.motivo = "pendiente", 0, ""
-        encargo.estado = "en_curso" if encargo.especificaciones else "especificando"
+                e.rondas, e.huellas, e.estrategia = 0, [], ""
+            # Una pendiente que ya había agotado sus intentos (quedó así al
+            # interrumpirse mientras esperaba una respuesta) arranca de cero:
+            # si no, el ciclo saltaría directo a "agotado" con un motivo vacío.
+            if e.estado == "pendiente" and e.intentos >= self.politica.max_intentos:
+                e.intentos = 0
         encargo.motivo = ""
         # Reanudar un archivado lo devuelve a la línea.
         encargo.archivado_en = None
         await self._bitacora.registrar(encargo.id, "humano", "reanudacion", {})
+        if encargo.preguntas_abiertas():
+            # Relanzar con una pregunta abierta volvería a correr la
+            # especificación que la hizo y duplicaría la pregunta: primero se
+            # responde, y la respuesta es la que relanza.
+            encargo.estado = "esperando_humano"
+            await self._guardar(encargo)
+            return encargo
+        encargo.estado = "en_curso" if encargo.especificaciones else "especificando"
         await self._guardar(encargo)
         self._lanzar(encargo.id)
+        return encargo
+
+    async def detener(self, encargo_id: str) -> Encargo:
+        """Corta un encargo que está corriendo. Queda "interrumpido", con todo
+        lo hecho guardado, listo para reanudar o cerrar.
+        """
+        tarea = self._tareas.get(encargo_id)
+        if tarea is None or tarea.done():
+            raise AccionNoPermitida("El encargo no está corriendo")
+        tarea.cancel()
+        # La tarea cancelada no guarda nada más; el estado lo fija esto.
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await tarea
+        encargo = await self.obtener(encargo_id)
+        encargo.estado, encargo.motivo = "interrumpido", "Detenido por una persona"
+        for e in encargo.especificaciones:
+            if e.estado == "en_curso":
+                e.estado = "pendiente"
+        await self._guardar(encargo)
+        await self._bitacora.registrar(encargo.id, "humano", "detenido", {})
+        await self._emitir(
+            encargo.id, self.name, "pending", "Detenido por una persona: se puede reanudar o cerrar"
+        )
+        return encargo
+
+    async def finalizar(self, encargo_id: str) -> Encargo:
+        """Cierra el encargo con lo que ya está aprobado: lo que falta queda
+        como fallido (sin terminar) y las preguntas abiertas, contestadas con
+        el cierre. Es la salida explícita para no dejar un encargo esperando
+        para siempre una decisión que nadie va a tomar.
+        """
+        encargo = await self._obtener_activo(encargo_id)
+        if encargo.estado == "terminado":
+            raise AccionNoPermitida("El encargo ya terminó")
+        for p in encargo.preguntas_abiertas():
+            p.respuesta = RESPUESTA_CIERRE
+        for e in encargo.especificaciones:
+            if e.estado in ("pendiente", "esperando_aprobacion", "en_curso"):
+                e.estado, e.motivo = "fallida", MOTIVO_SIN_TERMINAR
+        total = len(encargo.especificaciones)
+        aprobadas = sum(1 for e in encargo.especificaciones if e.estado == "aprobada")
+        encargo.estado = "terminado" if total and aprobadas == total else "fallido"
+        encargo.motivo = (
+            f"Cerrado por una persona con {aprobadas} de {total} especificaciones aprobadas"
+        )
+        await self._guardar(encargo)
+        await self._bitacora.registrar(
+            encargo.id, "humano", "cierre", {"aprobadas": aprobadas, "total": total}
+        )
+        await self._emitir(
+            encargo.id,
+            self.name,
+            "done" if encargo.estado == "terminado" else "error",
+            encargo.motivo,
+        )
+        await self._disparar(
+            encargo.id, "encargo_terminado", estado=encargo.estado, costo_usd=encargo.costo_usd
+        )
         return encargo
 
     async def recuperar_interrumpidos(self) -> list[str]:
@@ -385,7 +480,15 @@ class LiderFabrica:
     # --- ciclo principal ---
 
     def _lanzar(self, encargo_id: str) -> None:
-        self._tareas[encargo_id] = asyncio.create_task(self._correr_seguro(encargo_id))
+        tarea = asyncio.create_task(self._correr_seguro(encargo_id))
+        self._tareas[encargo_id] = tarea
+
+        def _soltar(t: asyncio.Task[None]) -> None:
+            # Solo si sigue siendo la misma: una acción humana pudo lanzar otra.
+            if self._tareas.get(encargo_id) is t:
+                del self._tareas[encargo_id]
+
+        tarea.add_done_callback(_soltar)
 
     async def _correr_seguro(self, encargo_id: str) -> None:
         try:
@@ -397,14 +500,24 @@ class LiderFabrica:
             )
         except Exception as e:  # noqa: BLE001 — la frontera de fallo del encargo
             log.exception("El encargo %s terminó con una excepción", encargo_id)
-            encargo = await self._repo.obtener(encargo_id)
-            if encargo is not None:
-                encargo.estado, encargo.motivo = "fallido", f"{type(e).__name__}: {e}"
-                await self._guardar(encargo)
-                await self._bitacora.registrar(
-                    encargo_id, self.name, "error", {"detalle": encargo.motivo}
-                )
-            await self._emitir(encargo_id, self.name, "error", f"Error inesperado: {e}")
+            motivo = f"{type(e).__name__}: {e}"
+            # Si registrar la falla también falla (p. ej. la base no responde),
+            # al menos el panel se entera: nunca un encargo mudo "en curso".
+            try:
+                encargo = await self._repo.obtener(encargo_id)
+                if encargo is not None:
+                    encargo.estado, encargo.motivo = "fallido", motivo
+                    for espec in encargo.especificaciones:
+                        if espec.estado == "en_curso":
+                            espec.estado = "pendiente"
+                    await self._guardar(encargo)
+                    await self._bitacora.registrar(
+                        encargo_id, self.name, "error", {"detalle": motivo}
+                    )
+            except Exception:  # noqa: BLE001
+                log.exception("No se pudo registrar la falla del encargo %s", encargo_id)
+            with contextlib.suppress(Exception):
+                await self._emitir(encargo_id, self.name, "error", f"Error inesperado: {e}")
 
     async def _correr(self, encargo_id: str) -> None:
         encargo = await self.obtener(encargo_id)
@@ -446,7 +559,11 @@ class LiderFabrica:
 
             async def con_limite(espec: Especificacion) -> bool:
                 async with limite:
-                    return await self._ciclo(encargo, espec)
+                    try:
+                        return await self._ciclo(encargo, espec)
+                    except EtapaVencida as vencida:
+                        # Se cierra solo esta especificación; las demás siguen.
+                        return await self._etapa_vencida(encargo, espec, vencida)
 
             resultados = await asyncio.gather(*(con_limite(e) for e in tanda))
             if not all(resultados) or encargo.preguntas_abiertas():
@@ -579,10 +696,20 @@ class LiderFabrica:
         detalle_rechazo: dict[str, object] | None = None
         propuesta = ""
         dependencias = await asyncio.to_thread(_codigo_de_dependencias, encargo, espec, espacio)
+        # Lo que escribió el intento anterior: si el siguiente entrega lo mismo
+        # y vuelve a fallar, el cerebro está dando vueltas en el mismo lugar.
+        firma_previa = ""
         espec.estado = "en_curso"
         await self._guardar(encargo)
 
         while espec.intentos < self.politica.max_intentos:
+            if espec.rondas >= self.politica.max_rondas:
+                return await self._cerrar_atascada(
+                    encargo,
+                    espec,
+                    f"alcanzó el tope de {self.politica.max_rondas} intentos en total",
+                )
+
             if presupuesto_agotado(encargo, self.politica):
                 espec.estado = "fallida"
                 espec.motivo = (
@@ -594,8 +721,11 @@ class LiderFabrica:
                 return True
 
             espec.intentos += 1
+            espec.rondas += 1
             intento = espec.intentos
             etiqueta = f"{espec.id} · intento {intento}/{self.politica.max_intentos}"
+            if espec.estrategia == ESTRATEGIA_REESCRITURA:
+                etiqueta += " (reescritura)"
 
             await self._emitir(
                 encargo.id, implementador.name, "running", f"{etiqueta}: {espec.titulo}"
@@ -617,6 +747,7 @@ class LiderFabrica:
                     historial=historial,
                     detalle_rechazo=detalle_rechazo,
                     dependencias=dependencias,
+                    estrategia=espec.estrategia,
                     inventario=[
                         str(a["ruta"])
                         for a in await asyncio.to_thread(_listar_archivos, espacio)
@@ -653,6 +784,11 @@ class LiderFabrica:
                 # Diagnosticador atribuiría a la especificación. Es el entorno.
                 return await self._cerebro_sin_respuesta(encargo, espec, intento, etiqueta)
 
+            # Solo con trabajo del cerebro: el guionado repite la plantilla a propósito.
+            firma = firma_archivos(impl.escritos)
+            sin_cambios = impl.origen == "cerebro" and firma == firma_previa
+            firma_previa = firma
+
             await self._emitir(encargo.id, revisor.name, "running", f"{etiqueta}: revisando")
             medidor = Medidor()
             veredicto = await self._etapa(
@@ -682,6 +818,11 @@ class LiderFabrica:
                 await self._emitir(
                     encargo.id, revisor.name, "error", f"{etiqueta}: {veredicto.motivo}"
                 )
+                atasco = self._registrar_huella(espec, veredicto.motivo)
+                if atasco is None and sin_cambios:
+                    atasco = (
+                        "el reintento entregó exactamente los mismos archivos y volvió a fallar"
+                    )
                 # Efímero: existe solo para este rechazo.
                 diagnosticador = Diagnosticador(
                     await self._cerebro_para("diagnosticador"), self._limite
@@ -744,6 +885,14 @@ class LiderFabrica:
                         "Necesita que una persona revise el harness."
                     )
                     return True
+                if atasco:
+                    cierre = await self._atasco(encargo, espec, atasco, etiqueta)
+                    if cierre is not None:
+                        return cierre
+                    # Estrategia nueva: los rechazos previos no deben hacer que
+                    # el Diagnosticador culpe a la especificación al primer fallo.
+                    motivos.clear()
+                    continue
                 if diagnostico.causa == "especificacion":
                     if self.politica.aprobacion_humana == "nunca":
                         espec.estado = "fallida"
@@ -798,6 +947,10 @@ class LiderFabrica:
                     motivo=motivo,
                     causa="verificacion",
                 )
+                if atasco := self._registrar_huella(espec, motivo):
+                    cierre = await self._atasco(encargo, espec, atasco, etiqueta)
+                    if cierre is not None:
+                        return cierre
                 continue
 
             # Compuerta de plugins: un veto es un rechazo más.
@@ -820,6 +973,10 @@ class LiderFabrica:
                 motivos.append(motivo)
                 detalle_rechazo = {"motivo": motivo}
                 historial.append(_resumen_intento(intento, motivo, "plugin", impl.escritos))
+                if atasco := self._registrar_huella(espec, motivo):
+                    cierre = await self._atasco(encargo, espec, atasco, etiqueta)
+                    if cierre is not None:
+                        return cierre
                 continue
 
             espec.estado, espec.motivo = "aprobada", ""
@@ -833,6 +990,14 @@ class LiderFabrica:
             return True
 
         agotado = f"Rechazada tras {espec.intentos} intento(s): {motivo}"
+        if espec.rondas >= self.politica.max_rondas:
+            # Ya no hay margen para otra ronda: preguntar solo dejaría el
+            # encargo esperando una respuesta que no puede servir de nada.
+            return await self._cerrar_atascada(
+                encargo,
+                espec,
+                f"alcanzó el tope de {self.politica.max_rondas} intentos en total ({motivo})",
+            )
         if self.politica.aprobacion_humana != "nunca":
             # No rendirse en silencio: una persona decide, con la propuesta a la vista.
             await self._emitir(encargo.id, self.name, "error", f"{espec.id}: {agotado}")
@@ -883,6 +1048,88 @@ class LiderFabrica:
         await self._emitir(
             encargo.id, self.name, "pending", "En pausa: esperando una decisión humana"
         )
+
+    @staticmethod
+    def _registrar_huella(espec: Especificacion, motivo: str) -> str | None:
+        """Suma el rechazo al historial de la especificación y devuelve por
+        qué está atascada, o None si todavía avanza.
+        """
+        espec.huellas.append(huella_rechazo(motivo))
+        return detectar_atasco(espec.huellas)
+
+    async def _atasco(
+        self, encargo: Encargo, espec: Especificacion, razon: str, etiqueta: str
+    ) -> bool | None:
+        """Primera vez: cambio de estrategia (reescribir desde cero) y al
+        menos un intento más — devuelve None para que el ciclo siga. Si ya se
+        reescribió y sigue atascada, la cierra como fallida y devuelve True.
+        """
+        await self._bitacora.registrar(
+            encargo.id,
+            self.name,
+            "atasco",
+            {
+                "espec_id": espec.id,
+                "razon": razon,
+                "rondas": espec.rondas,
+                "estrategia_previa": espec.estrategia or "normal",
+            },
+        )
+        await self._disparar(encargo.id, "atasco", espec_id=espec.id, razon=razon)
+        if espec.estrategia != ESTRATEGIA_REESCRITURA and espec.rondas < self.politica.max_rondas:
+            espec.estrategia = ESTRATEGIA_REESCRITURA
+            espec.intentos = min(espec.intentos, self.politica.max_intentos - 1)
+            await self._guardar(encargo)
+            await self._emitir(
+                encargo.id,
+                self.name,
+                "running",
+                f"{etiqueta}: atasco detectado ({razon}); cambio de estrategia: "
+                "reescribir desde cero",
+            )
+            return None
+        return await self._cerrar_atascada(encargo, espec, razon)
+
+    async def _cerrar_atascada(self, encargo: Encargo, espec: Especificacion, razon: str) -> bool:
+        espec.estado = "fallida"
+        espec.motivo = (
+            f"Atascada: {razon} ({espec.rondas} intento(s) en total). Se cerró para no "
+            "seguir gastando; ajusta la especificación o reanuda el encargo para reintentarla."
+        )
+        encargo.motivo = encargo.motivo or espec.motivo
+        await self._guardar(encargo)
+        await self._bitacora.registrar(
+            encargo.id,
+            self.name,
+            "especificacion_atascada",
+            {"espec_id": espec.id, "razon": razon, "rondas": espec.rondas},
+        )
+        await self._emitir(encargo.id, self.name, "error", f"{espec.id}: {espec.motivo}")
+        await self._disparar(
+            encargo.id, "especificacion_fallida", espec_id=espec.id, motivo=espec.motivo
+        )
+        return True
+
+    async def _etapa_vencida(
+        self, encargo: Encargo, espec: Especificacion, error: EtapaVencida
+    ) -> bool:
+        espec.estado = "fallida"
+        espec.motivo = (
+            f"{error}: el cerebro o las pruebas quedaron colgados. Reanuda el encargo para "
+            "reintentarla (si se repite, sube FABRICA_TIMEOUT_ETAPA_S o revisa el cerebro)."
+        )
+        await self._guardar(encargo)
+        await self._bitacora.registrar(
+            encargo.id,
+            self.name,
+            "etapa_vencida",
+            {"espec_id": espec.id, "etapa": error.etapa, "segundos": error.segundos},
+        )
+        await self._emitir(encargo.id, self.name, "error", f"{espec.id}: {espec.motivo}")
+        await self._disparar(
+            encargo.id, "especificacion_fallida", espec_id=espec.id, motivo=espec.motivo
+        )
+        return True
 
     async def _compuerta_humana(self, encargo: Encargo, espec: Especificacion) -> None:
         espec.estado = "esperando_aprobacion"
@@ -1036,13 +1283,21 @@ class LiderFabrica:
         """
         inicio = time.perf_counter()
         resultado_txt = "error"
+        tope = self.politica.timeout_etapa_s
         try:
-            valor = await en_tarea(
-                self._usar_prefect,
-                etapa,
-                f"{espec_id or encargo.id}-{etapa}-{intento}",
-                lambda: trabajo,
-            )
+            try:
+                valor = await asyncio.wait_for(
+                    en_tarea(
+                        self._usar_prefect,
+                        etapa,
+                        f"{espec_id or encargo.id}-{etapa}-{intento}",
+                        lambda: trabajo,
+                    ),
+                    tope if tope > 0 else None,
+                )
+            except TimeoutError as e:
+                resultado_txt = "vencida"
+                raise EtapaVencida(etapa, tope) from e
             resultado_txt = resultado_de(valor)
             return valor
         finally:
@@ -1178,9 +1433,8 @@ def _codigo_de_dependencias(
     codigo: dict[str, str] = {}
     for dep in sorted(vistas):
         for ruta in por_id[dep].archivos:
-            archivo = espacio / ruta
-            if ruta.startswith("src/") and ruta not in codigo and archivo.is_file():
-                codigo[ruta] = archivo.read_text(encoding="utf-8", errors="replace")
+            if ruta.startswith("src/") and ruta not in codigo and archivo_seguro(espacio, ruta):
+                codigo[ruta] = (espacio / ruta).read_text(encoding="utf-8", errors="replace")
     return codigo
 
 
@@ -1230,7 +1484,13 @@ def _copiar_espacio(origen: Path, destino: Path) -> list[dict[str, object]]:
     """
     if not origen.is_dir():
         return []
-    shutil.copytree(origen, destino, ignore=shutil.ignore_patterns(*_IGNORAR), dirs_exist_ok=True)
+
+    def ignorar(carpeta: str, nombres: list[str]) -> set[str]:
+        # Los enlaces simbólicos no se heredan: copytree copiaría el archivo
+        # al que apuntan (p. ej. un .env fuera del espacio) como si fuera propio.
+        return {n for n in nombres if n in _IGNORAR or (Path(carpeta) / n).is_symlink()}
+
+    shutil.copytree(origen, destino, ignore=ignorar, dirs_exist_ok=True)
     return [
         {
             "ruta": a["ruta"],

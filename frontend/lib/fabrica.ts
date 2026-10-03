@@ -219,3 +219,124 @@ export function decisionesPendientes(encargos: Encargo[]): Decision[] {
   );
   return sueltas.map((d, i) => ({ ...d, prioridad: i + 1 }));
 }
+
+// --- qué está pasando, en una frase, y qué puede hacer la persona ---
+
+export type Tono = "ok" | "espera" | "mal" | "neutro";
+
+export interface Situacion {
+  tono: Tono;
+  titulo: string;
+  detalle: string;
+  /** Acciones que tienen sentido ahora mismo. */
+  puedeDetener: boolean;
+  puedeReanudar: boolean;
+  puedeCerrar: boolean;
+}
+
+function lista(ids: string[]): string {
+  return ids.length === 1 ? ids[0] : `${ids.slice(0, -1).join(", ")} y ${ids[ids.length - 1]}`;
+}
+
+/**
+ * El estado del encargo traducido a algo accionable. La regla: nunca dejar a
+ * la persona frente a un encargo quieto sin decirle por qué ni qué hacer.
+ */
+export function situacionEncargo(e: Encargo): Situacion {
+  const especs = e.especificaciones;
+  const total = especs.length;
+  const aprobadas = especs.filter((s) => s.estado === "aprobada").length;
+  const sinResolver = especs.filter((s) => s.estado === "fallida" || s.estado === "bloqueada");
+  const atascadas = especs.filter((s) => s.motivo.startsWith("Atascada")).map((s) => s.id);
+  const pendientesHumanas =
+    e.preguntas.filter((p) => p.respuesta === null).length +
+    especs.filter((s) => s.estado === "esperando_aprobacion").length;
+  const base = { puedeDetener: false, puedeReanudar: false, puedeCerrar: false };
+
+  if (e.corriendo) {
+    const reescribiendo = especs
+      .filter((s) => s.estrategia === "reescritura" && s.estado === "en_curso")
+      .map((s) => s.id);
+    return {
+      ...base,
+      tono: "neutro",
+      titulo:
+        e.estado === "especificando"
+          ? "Descomponiendo el pedido en especificaciones"
+          : `Construyendo: ${aprobadas} de ${total} especificaciones listas`,
+      detalle: reescribiendo.length
+        ? `${lista(reescribiendo)} repitió el mismo error y se está reescribiendo desde cero con otro enfoque.`
+        : "Puedes cerrar esta página: el trabajo sigue en segundo plano.",
+      puedeDetener: true,
+    };
+  }
+
+  switch (e.estado) {
+    case "esperando_humano":
+      return {
+        ...base,
+        tono: "espera",
+        titulo:
+          pendientesHumanas === 1
+            ? "Necesita una decisión tuya"
+            : `Necesita ${pendientesHumanas} decisiones tuyas`,
+        detalle:
+          "Respóndelas abajo para que siga. Si no quieres continuar, ciérralo con lo que ya está aprobado.",
+        puedeCerrar: true,
+      };
+    case "terminado":
+      return {
+        ...base,
+        tono: "ok",
+        titulo: "Terminado",
+        detalle: `${aprobadas} de ${total} especificaciones aprobadas${
+          e.url_despliegue ? " y desplegadas" : ""
+        }.`,
+      };
+    case "fallido":
+      return {
+        ...base,
+        tono: "mal",
+        titulo:
+          aprobadas > 0
+            ? `Terminó con ${sinResolver.length} especificación(es) sin resolver`
+            : "No se pudo completar",
+        detalle: atascadas.length
+          ? `${lista(atascadas)} se atascó repitiendo el mismo error y se cerró para no seguir gastando. Ajusta el pedido o reanuda para intentarlo otra vez.`
+          : e.motivo || "Reanuda el encargo para reintentar lo que falló.",
+        puedeReanudar: true,
+      };
+    case "interrumpido":
+      return {
+        ...base,
+        tono: "espera",
+        titulo: "Detenido",
+        detalle: `${e.motivo || "Quedó a medias"}. Reanúdalo para seguir desde donde quedó, o ciérralo con lo ya aprobado.`,
+        puedeReanudar: true,
+        puedeCerrar: true,
+      };
+    default:
+      return { ...base, tono: "neutro", titulo: "Arrancando…", detalle: "El Líder está tomando el encargo." };
+  }
+}
+
+// --- modo "diseñar por especificaciones" ---
+
+export const CATEGORIAS_REQUISITOS: Record<string, string> = {
+  usuarios: "Usuarios",
+  datos: "Datos",
+  reglas: "Reglas",
+  interfaz: "Interfaz",
+  errores: "Errores",
+  seguridad: "Seguridad",
+  aceptacion: "Aceptación",
+  alcance: "Alcance",
+  general: "General",
+};
+
+export const ETIQUETA_COBERTURA = {
+  clara: "cubierta",
+  resuelta: "resuelta",
+  parcial: "a medias",
+  falta: "falta",
+} as const;

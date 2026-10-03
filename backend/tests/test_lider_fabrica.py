@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fabrica_falsos import CerebroCaro, EjecutorGuionado, construir_lider
+from fabrica_falsos import CerebroCaro, EjecutorConSalidas, EjecutorGuionado, construir_lider
 
 from app.adaptadores.cerebro_guionado import CerebroGuionado
 from app.dominio.fabrica import (
@@ -208,8 +208,15 @@ async def test_se_puede_responder_la_segunda_duda_despues_de_reintentar(tmp_path
     siguiente del Diagnosticador salía con el mismo id que la anterior
     (D-S1-2). Responderla chocaba con la ya respondida: "Esa pregunta no
     existe o ya fue respondida".
+
+    Dos errores distintos (cada uno repetido dos veces) para que la duda
+    vuelva a aparecer sin que se dispare la detección de atascos.
     """
-    lider, *_ = construir_lider(tmp_path, ejecutor=EjecutorGuionado([1]))
+    error_a = (1, "FAILED tests/x.py - ImportError: cannot import name carrito")
+    error_b = (1, "FAILED tests/x.py - AssertionError: total sin impuestos")
+    lider, *_ = construir_lider(
+        tmp_path, ejecutor=EjecutorConSalidas([error_a, error_a, error_b, error_b])
+    )
 
     creado = await lider.crear("Calcular el total de un carrito con impuestos")
     await lider.esperar(creado.id)

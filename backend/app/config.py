@@ -52,6 +52,21 @@ class Config(BaseSettings):
     # JSON {modelo: [USD por millón de entrada, USD por millón de salida]}
     # para modelos fuera de la tabla de Claude, p. ej. '{"deepseek-chat": [0.27, 1.1]}'.
     tarifas_extra: str = ""
+    # Tope de salida de cada llamada. El Implementador devuelve archivos
+    # completos en un JSON: con poco margen la respuesta llega cortada y el
+    # encargo cae a la plantilla de respaldo.
+    cerebro_max_tokens: int = 16000
+    openai_compat_max_tokens: int = 8192
+    # Por llamada HTTP. Los reintentos cubren 429/529/5xx y cortes de red.
+    cerebro_timeout_s: float = 300.0
+    cerebro_reintentos: int = 2
+
+    # --- acceso ---
+    # Si se define, toda la API (salvo /api/health) y el WebSocket exigen este
+    # token: cabecera `Authorization: Bearer <token>` o `?token=` en /ws. El
+    # panel lo manda si NEXT_PUBLIC_ORQUESTA_TOKEN tiene el mismo valor.
+    # Recomendado si el backend escucha en algo que no sea localhost.
+    orquesta_token: str | None = None
 
     # --- fábrica de software (orchestrator/lider.py) ---
     # Modelo por rol. Vacío = el del proveedor activo (anthropic_model u
@@ -64,6 +79,12 @@ class Config(BaseSettings):
     fabrica_modelo_diagnosticador: str = ""
     fabrica_dir_espacios: str = str(RAIZ_PROYECTO / "fabrica_espacios")
     fabrica_max_intentos: int = 2
+    # Tope duro de intentos por especificación sumando los reintentos humanos.
+    # Al llegar se cierra como fallida con un informe, en vez de seguir girando.
+    fabrica_max_rondas: int = 6
+    # Ninguna etapa puede tardar más que esto (s); 0 lo desactiva. Tiene que
+    # ser mayor que CLAUDE_CLI_TIMEOUT_S y CEREBRO_TIMEOUT_S con sus reintentos.
+    fabrica_timeout_etapa_s: float = 1200.0
     # Tope de gasto por encargo en USD; 0 lo desactiva.
     fabrica_presupuesto_usd: float = 1.0
     # 'ambiguedad': pregunta solo cuando el Especificador detecta un conflicto
@@ -162,6 +183,20 @@ class Config(BaseSettings):
             avisos.append(
                 "FABRICA_ORQUESTADOR=prefect pero Prefect no está instalado "
                 "(pip install -r requirements-prefect.txt); la fábrica corre sin él"
+            )
+
+        if "*" in self.lista_origenes:
+            avisos.append(
+                "ORIGENES_PERMITIDOS incluye '*': cualquier página web podría usar la API "
+                "desde el navegador de quien tenga el panel abierto"
+            )
+
+        if 0 < self.fabrica_timeout_etapa_s <= self.claude_cli_timeout_s and (
+            self.brain == "claude-cli"
+        ):
+            avisos.append(
+                "FABRICA_TIMEOUT_ETAPA_S es menor que CLAUDE_CLI_TIMEOUT_S: las etapas se "
+                "cortarán antes de que el CLI pueda responder"
             )
 
         if self.deploy_enabled and not self.github_repo:

@@ -26,7 +26,12 @@ from pathlib import Path
 from ..dominio.fabrica import ResultadoComando
 
 EJECUTABLES_PERMITIDOS = frozenset({"python", "npx"})
-_SECRETO = re.compile(r"(API_KEY|TOKEN|SECRET|PASSWORD)", re.IGNORECASE)
+# Por nombre: claves, tokens, contraseñas, credenciales y URLs de bases de
+# datos (que suelen llevar usuario y contraseña adentro).
+_SECRETO = re.compile(
+    r"(KEY|TOKEN|SECRET|PASSW|CREDENTIAL|AUTH|COOKIE|SESSION|DATABASE_URL|DSN|PRIVATE)",
+    re.IGNORECASE,
+)
 _MAX_SALIDA = 6000
 
 

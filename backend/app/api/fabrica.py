@@ -123,6 +123,22 @@ async def reanudar_encargo(
     return _vista(await _con_errores(lider.reanudar(encargo_id)), lider)
 
 
+@router.post("/encargos/{encargo_id}/detener")
+async def detener_encargo(
+    encargo_id: str, lider: LiderFabrica = Depends(obtener_lider)
+) -> dict[str, Any]:
+    """Corta un encargo en marcha; queda interrumpido, listo para reanudar o cerrar."""
+    return _vista(await _con_errores(lider.detener(encargo_id)), lider)
+
+
+@router.post("/encargos/{encargo_id}/finalizar")
+async def finalizar_encargo(
+    encargo_id: str, lider: LiderFabrica = Depends(obtener_lider)
+) -> dict[str, Any]:
+    """Cierra el encargo con lo ya aprobado: lo pendiente queda sin terminar."""
+    return _vista(await _con_errores(lider.finalizar(encargo_id)), lider)
+
+
 @router.get("/encargos/{encargo_id}/bitacora")
 async def bitacora_encargo(
     encargo_id: str, salud: ServicioSaludFabrica = Depends(obtener_salud)
@@ -190,6 +206,8 @@ async def configuracion_fabrica(lider: LiderFabrica = Depends(obtener_lider)) ->
         "prefect_ui_url": config.prefect_ui_url if lider.usa_prefect else None,
         "aprobacion_humana": lider.politica.aprobacion_humana,
         "max_intentos": lider.politica.max_intentos,
+        "max_rondas": lider.politica.max_rondas,
+        "timeout_etapa_s": lider.politica.timeout_etapa_s,
         "presupuesto_usd": lider.politica.presupuesto_encargo_usd,
         "cache_llm": config.fabrica_cache_llm,
     }

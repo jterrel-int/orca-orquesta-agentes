@@ -40,6 +40,24 @@ def preparar_espacio(espacio: Path) -> None:
         ini.write_text(_PYTEST_INI, encoding="utf-8")
 
 
+def dentro_del_espacio(espacio: Path, ruta: Path) -> bool:
+    """Resuelve enlaces simbólicos: `ruta` tiene que quedar dentro del espacio."""
+    try:
+        return ruta.resolve().is_relative_to(espacio.resolve())
+    except OSError:
+        return False
+
+
+def archivo_seguro(espacio: Path, relativa: str) -> bool:
+    """Un archivo del espacio que se puede leer para mandárselo al cerebro:
+    existe, no es un enlace simbólico y no apunta fuera. Sin esto, código
+    generado podría enlazar `src/x.py` a `backend/.env` y el siguiente
+    intento le mandaría las claves al LLM.
+    """
+    archivo = espacio / relativa
+    return archivo.is_file() and not archivo.is_symlink() and dentro_del_espacio(espacio, archivo)
+
+
 def _modulo_fuente(espec: Especificacion) -> str | None:
     fuente = next((a for a in espec.archivos if a.startswith("src/") and a.endswith(".py")), None)
     return PurePosixPath(fuente).stem if fuente else None
@@ -109,7 +127,10 @@ def _instruccion() -> str:
         "unitarias con pytest. El código Python va en src/ y las pruebas lo importan "
         "como `from src.modulo import funcion`. Cada función pública debe usarse en "
         "alguna prueba. Si hay un detalle_rechazo_previo, corregí exactamente ese error "
-        "siguiendo el diagnóstico. Respetá el código_de_dependencias tal como está (mismos "
+        "siguiendo el diagnóstico. Si la estrategia es 'reescritura', los intentos previos "
+        "quedaron atascados en el mismo error: descartá ese enfoque y escribí los archivos "
+        "desde cero con una solución distinta y más simple. "
+        "Respetá el código_de_dependencias tal como está (mismos "
         "esquemas de tablas, nombres y firmas); si necesitás cambiarlo, hacelo de forma "
         "compatible con lo que ya existe. Respondé SOLO "
         'un objeto JSON: {"archivos": [{"ruta": "src/x.py", "contenido": "..."}]}.'
@@ -135,20 +156,31 @@ class Implementador:
         inventario: list[str] | None = None,
         detalle_rechazo: dict[str, object] | None = None,
         dependencias: dict[str, str] | None = None,
+        estrategia: str = "",
     ) -> ResultadoImplementacion:
         """`historial` es el resumen compacto de los intentos anteriores de
         esta misma especificación (motivo, causa y archivos de cada uno): el
         reintento arranca informado sin arrastrar las salidas completas.
+
+        Con `estrategia="reescritura"` no se le muestran los archivos actuales:
+        verlos lo ancla al mismo enfoque que ya quedó atascado.
         """
         preparar_espacio(espacio)
-        actuales = {
-            a: (espacio / a).read_text(encoding="utf-8")
-            for a in espec.archivos
-            if (espacio / a).is_file()
-        }
+        actuales = (
+            {}
+            if estrategia == "reescritura"
+            else {
+                a: (espacio / a).read_text(encoding="utf-8", errors="replace")
+                for a in espec.archivos
+                if archivo_seguro(espacio, a)
+            }
+        )
         contexto = armar_contexto(
             {
-                "especificacion": vars(espec),
+                "especificacion": {
+                    k: v for k, v in vars(espec).items() if k not in ("huellas", "rondas")
+                },
+                "estrategia": estrategia or "normal",
                 "archivos_actuales": actuales,
                 "motivo_rechazo_previo": motivo_rechazo or None,
                 # El error real (salida de las pruebas) y el diagnóstico: sin
@@ -189,7 +221,15 @@ class Implementador:
                 resultado.denegados.append(ruta)
                 continue
             destino = espacio / ruta
+            if not dentro_del_espacio(espacio, destino.parent):
+                # Una carpeta intermedia es un enlace simbólico que sale del
+                # espacio (lo pudo crear código generado en un intento previo).
+                resultado.denegados.append(ruta)
+                continue
             destino.parent.mkdir(parents=True, exist_ok=True)
+            if destino.is_symlink():
+                # write_text seguiría el enlace y escribiría fuera del espacio.
+                destino.unlink()
             destino.write_text(str(archivo.get("contenido", "")), encoding="utf-8")
             # Se relee del disco: lo que se registra es lo que quedó escrito.
             en_disco = destino.read_text(encoding="utf-8")

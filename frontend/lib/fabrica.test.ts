@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentesVivos, decisionesPendientes } from "./fabrica";
+import { agentesVivos, decisionesPendientes, situacionEncargo } from "./fabrica";
 import type { Encargo, Especificacion, EventoAgente, Pregunta } from "./types";
 
 function espec(id: string, estado: Especificacion["estado"] = "pendiente"): Especificacion {
@@ -95,5 +95,66 @@ describe("agentesVivos", () => {
     ];
     const vivos = agentesVivos(eventos, new Set(["e1"]));
     expect(Object.fromEntries(vivos)).toEqual({ implementador: 1, revisor: 1 });
+  });
+});
+
+describe("situacionEncargo", () => {
+  const espec = (id: string, estado: Especificacion["estado"], motivo = ""): Especificacion => ({
+    id,
+    titulo: id,
+    descripcion: "",
+    criterios: [],
+    archivos: [],
+    depende_de: [],
+    requiere_aprobacion: false,
+    e2e: false,
+    estado,
+    intentos: 1,
+    motivo,
+    aprobada_por_humano: false,
+  });
+  const encargo = (parcial: Partial<Encargo>): Encargo => ({
+    id: "e1",
+    pedido: "x",
+    estado: "en_curso",
+    especificaciones: [],
+    preguntas: [],
+    costo_usd: 0,
+    motivo: "",
+    url_despliegue: null,
+    creado_en: "2026-01-01",
+    actualizado_en: "2026-01-01",
+    corriendo: false,
+    version: 1,
+    padre_id: null,
+    raiz_id: null,
+    linaje: "e1",
+    archivado_en: null,
+    ...parcial,
+  });
+
+  it("corriendo: se puede detener", () => {
+    const s = situacionEncargo(encargo({ corriendo: true, especificaciones: [espec("S1", "aprobada"), espec("S2", "en_curso")] }));
+    expect(s.titulo).toBe("Construyendo: 1 de 2 especificaciones listas");
+    expect(s.puedeDetener).toBe(true);
+  });
+
+  it("esperando: se puede cerrar con lo aprobado", () => {
+    const s = situacionEncargo(
+      encargo({
+        estado: "esperando_humano",
+        preguntas: [{ id: "p", texto: "?", opciones: [], respuesta: null, origen: "especificador", espec_id: null }],
+      }),
+    );
+    expect(s.titulo).toBe("Necesita una decisión tuya");
+    expect(s.puedeCerrar).toBe(true);
+  });
+
+  it("fallido por atasco: lo dice y ofrece reanudar", () => {
+    const s = situacionEncargo(
+      encargo({ estado: "fallido", especificaciones: [espec("S1", "fallida", "Atascada: el mismo error")] }),
+    );
+    expect(s.detalle).toContain("S1 se atascó");
+    expect(s.puedeReanudar).toBe(true);
   });
 });
